@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a1a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vanilla Player">
+<link rel="manifest" href="manifest.json">
+<title>Vanilla Player</title>
+<style>
+html,body{height:100%;touch-action:pan-x;overflow:hidden;background:#1a1a1a;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont;line-height:1.25;-webkit-font-smoothing:antialiased;}
+body{margin:0;position:fixed;width:100%;height:100%}
+#screen1,#screen2,#screen3,#screen4{position:absolute;inset:0;width:100%;height:100%;will-change:transform;touch-action:pan-x;overflow:hidden}
+#screen2{display:flex;flex-direction:column}
+#screen1{background:#1a1a1a}
+#screen2{background:#222}
+#screen3{background:#252530}
+#screen4{background:#2a2a20}
+#screen1.animate,#screen2.animate,#screen3.animate,#screen4.animate{transition:transform .2s ease}
+/* shuffle button state */
+#shuffleBtn{transition:background-color .15s ease,color .15s ease;font-size:30px}
+#shuffleBtn.on{background:#0a84ff;color:#fff}
+/* normalize button state */
+#normalizeBtn{transition:background-color .15s ease,color .15s ease;font-size:30px}
+#normalizeBtn.on{background:#0a84ff;color:#fff}
+/* scrollable lists */
+#filelistwrapper {overflow-y:auto;max-height:100vh;touch-action:pan-y; -webkit-overflow-scrolling:touch}
+button{padding:0;font-size:20px;width:52px;height:52px;background:#333;color:#e0e0e0;border:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+#screen2 button[onclick*="prev"],#screen2 button[onclick*="next"]{width:73px;height:73px;font-size:30px}
+/* precise centered glyphs for small circle buttons (+ / −) */
+button[data-icon]{position:relative;font-size:0}
+button[data-icon]::before,button[data-icon='plus']::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:currentColor;border-radius:1px}
+button[data-icon]::before{width:14px;height:2px}
+button[data-icon='plus']::after{width:2px;height:14px}
+/* play / pause icons */
+button[data-icon='play']::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-40%,-50%);width:0;height:0;border-style:solid;border-width:10px 0 10px 16px;border-color:transparent transparent transparent currentColor;background:transparent}
+/* smaller play triangle on screen4 */
+#screen4 button[data-icon='play']::before{border-width:7px 0 7px 11px}
+button[data-icon='pause']::before,button[data-icon='pause']::after{content:"";position:absolute;top:50%;width:5px;height:18px;background:currentColor;border-radius:1px;transform:translateY(-50%)}
+button[data-icon='pause']::before{left:calc(50% - 6px)}
+button[data-icon='pause']::after{left:calc(50% + 6px - 5px)}
+body[data-screen="1"] #screen1{z-index:2}body[data-screen="1"] #screen2{z-index:1}body[data-screen="1"] #screen3{z-index:1}
+body[data-screen="2"] #screen2{z-index:2}body[data-screen="2"] #screen1{z-index:1}body[data-screen="2"] #screen3{z-index:1}
+body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:1}body[data-screen="3"] #screen2{z-index:1}body[data-screen="3"] #screen4{z-index:1}
+body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:1}body[data-screen="4"] #screen2{z-index:1}body[data-screen="4"] #screen3{z-index:1}
+</style>
+</head>
+<body data-screen="1">
+
+<div id=screen1>
+<div style="display:flex;align-items:center;gap:12px;margin:14px 8px 8px 8px">
+<h2 style="margin:0;font-size:24px;font-weight:600">Library</h2>
+<button onclick="document.getElementById('dir').click()" style="width:32px;height:32px;font-size:20px">＋</button>
+</div>
+    <input id=dir type=file webkitdirectory multiple style="display: none;">
+    <div id="filelistwrapper">
+        <div id=emptyLibraryMsg style="padding:20px;text-align:center;color:#999;font-size:14px;line-height:1.5">
+            Tap + to add music files.<br>All playlists use files from this library.<br><b>Note:</b> files aren't saved, you'll need to re-add them after reload.
+        </div>
+        <ol id=playlist style="list-style:none;padding:0;margin:0 8px"></ol>
+    </div>
+</div>
+
+<div id=screen2>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:20px">
+        <h1 id=trackTitle>—</h1>
+        <span id=gainInfo style="color:#666;font-size:14px"></span>
+    </div>
+    <audio id=audioElement controls preload="metadata" style="width:65%;margin:0 auto 20px;display:block;transform:scale(1.53);transform-origin:center"></audio>
+    <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:20px">
+        <button id=shuffleBtn onclick="player.toggleShuffle()">⤭</button>
+        <button onclick="player.prev()">⏮︎</button>
+        <button onclick="player.next()">⏭︎</button>
+        <button id=normalizeBtn onclick="player.toggleNormalize()">⚏</button>
+    </div>
+</div>
+
+<div id=screen3>
+<div style="display:flex;align-items:center;gap:12px;margin:14px 8px 8px 8px">
+<h2 style="margin:0;font-size:24px;font-weight:600">Songs</h2>
+<button onclick="player.goToLibrary()" style="width:32px;height:32px;font-size:20px">＋</button>
+</div>
+<div style="overflow-y:auto;max-height:calc(100vh - 80px);padding:0 8px;touch-action:pan-y;-webkit-overflow-scrolling:touch">
+<ol id=playlistView style="list-style:none;padding:0;margin:0"></ol>
+</div>
+</div>
+<div id=screen4>
+<div style="display:flex;align-items:center;gap:12px;margin:14px 8px 8px 8px">
+<h2 style="margin:0;font-size:24px;font-weight:600">Playlists</h2>
+<button id=addPlaylist style="width:32px;height:32px;font-size:20px">＋</button>
+</div>
+<ol id=playlists style="list-style:none;padding:0;margin:0 8px"></ol>
+<div style="margin:20px 8px">
+<button id=clearCacheBtn style="width:auto;padding:8px 16px;border-radius:8px;font-size:14px">Clear Cache</button>
+</div>
+</div>
+
+<script src="player.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
