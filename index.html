@@ -68,7 +68,7 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
         <h1 id=trackTitle>—</h1>
         <span id=gainInfo style="color:#666;font-size:14px"></span>
     </div>
-    <audio id=audioElement controls preload="metadata" style="width:65%;margin:0 auto 20px;display:block;transform:scale(1.53);transform-origin:center"></audio>
+    <audio id=audioElement controls preload="none" x-webkit-airplay="allow" webkit-playsinline playsinline style="width:65%;margin:0 auto 20px;display:block;transform:scale(1.53);transform-origin:center"></audio>
     <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:20px">
         <button id=shuffleBtn onclick="player.toggleShuffle()">⤭</button>
         <button onclick="player.prev()">⏮︎</button>
