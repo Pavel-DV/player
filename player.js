@@ -990,8 +990,8 @@ function pause() {
   //   return;
   // }
 
-  // offset = audioElement.currentTime || 0; //  TODO: Move to event listener?
-  // audioElement.src = URL.createObjectURL(files[index]); //  TODO: Move to event listener?
+  offset = audioElement.currentTime || 0; //  TODO: Move to event listener?
+  audioElement.src = URL.createObjectURL(files[index]); //  TODO: Move to event listener?
 
   isPlaying = false;
   highlight();
@@ -1074,6 +1074,7 @@ window.player = { play, pause, next, prev, toggleShuffle, toggleNormalize, goToL
 // Sync state when user uses native controls
 let isSettingSrc = false;
 audioElement.addEventListener('play', () => {
+  console.log('play event');
   // Skip recursive calls but allow handler setup
   if (!audioElement.src || audioElement.src === window.location.href) {
     if (files[index] && !isSettingSrc) {
@@ -1094,22 +1095,24 @@ audioElement.addEventListener('play', () => {
         isSettingSrc = false;
         console.error('❌ Play failed:', e);
       });
-      return; // Skip the rest for this initial call
+    } else {
+      console.warn('⚠️ play event: no valid source or already setting src');
     }
-    console.warn('⚠️ play event: no valid source or already setting src');
-    return;
   }
   
-  if (audioContext && audioContext.state === 'suspended') {
-    audioContext.resume();
-  }
-  if (gainNode) audioElement.volume = 1.0;
-  setupMediaSessionHandlers();
+  // if (audioContext && audioContext.state === 'suspended') {
+  //   audioContext.resume();
+  // }
+  // if (gainNode) audioElement.volume = 1.0;
+  // setupMediaSessionHandlers();
+
+// in addEventListener('playing'
 });
  
 audioElement.addEventListener('playing', () => {
+  console.log('playing event');
   if (audioContext && audioContext.state === 'suspended') {
-    audioContext.resume().catch(() => {});
+    audioContext.resume();
   }
   if (gainNode) audioElement.volume = 1.0;
   applyVolumeForCurrentTrack();
@@ -1127,7 +1130,7 @@ audioElement.addEventListener('pause', () => {
     offset = audioElement.currentTime || 0;
   }
 
-  audioElement.src = URL.createObjectURL(files[index]);
+  // audioElement.src = URL.createObjectURL(files[index]);
 
   isPlaying = false;
   highlight();
@@ -1314,7 +1317,7 @@ document.addEventListener('visibilitychange', () => {
     audioElement.src = URL.createObjectURL(files[index]);
     audioElement.currentTime = offset;
     audioElement.play()
-  } else { //  TODO: Not Works
+  } else if (audioContext && document.hidden && !isPlaying) { //  TODO: Not Works?
     audioElement.src = URL.createObjectURL(files[index]);
     audioElement.currentTime = offset;
   }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'player-v3';
+const CACHE_NAME = 'player-v4';
 const ASSETS = [
   '/',
   '/index.html',
@@ -14,7 +14,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys => 
+    caches.keys().then(keys =>
       Promise.all(keys.map(key => key !== CACHE_NAME && caches.delete(key)))
     )
   );

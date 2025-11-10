@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vanilla Player">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <link rel="manifest" href="manifest.json">
 <title>Vanilla Player</title>
 <style>
@@ -54,6 +57,7 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 <h2 style="margin:0;font-size:24px;font-weight:600">Library</h2>
 <button onclick="document.getElementById('dir').click()" style="width:32px;height:32px;font-size:20px">＋</button>
 <button onclick="addAllFilesToCurrentPlaylist()" style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px">Add All</button>
+<button onclick="refreshApp()" style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px;background:#0a84ff;color:#fff">Refresh</button>
 </div>
     <input id=dir type=file webkitdirectory multiple style="display: none;">
     <div id="filelistwrapper">
@@ -100,8 +104,49 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 
 <script src="player.js"></script>
 <script>
+function refreshApp() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (!reg) {
+        window.location.reload();
+        return;
+      }
+      const reloadPage = () => {
+        window.location.reload();
+      };
+      const waitForActivation = (worker) => {
+        if (!worker) {
+          reloadPage();
+          return;
+        }
+        if (worker.state === 'activated') {
+          reloadPage();
+          return;
+        }
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'activated') {
+            reloadPage();
+          }
+        });
+      };
+      reg.update().then(() => {
+        if (reg.installing) {
+          waitForActivation(reg.installing);
+        } else if (reg.waiting) {
+          waitForActivation(reg.waiting);
+        } else {
+          reloadPage();
+        }
+      }).catch(reloadPage);
+    });
+  } else {
+    window.location.reload();
+  }
+}
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
 }
 </script>
 </body>
