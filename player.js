@@ -984,14 +984,14 @@ function play() {
 function pause() {
   console.log('⏸ PAUSE function');
 
-  if (!isPlaying) {
-    console.log('ℹ️ pause: not playing, calling play instead');
-    play();
-    return;
-  }
+  // if (!isPlaying) { //  TODO remove?
+  //   console.log('ℹ️ pause: not playing, calling play instead');
+  //   play();
+  //   return;
+  // }
 
-  offset = audioElement.currentTime || 0;
-  audioElement.src = URL.createObjectURL(files[index]);
+  // offset = audioElement.currentTime || 0; //  TODO: Move to event listener?
+  // audioElement.src = URL.createObjectURL(files[index]); //  TODO: Move to event listener?
 
   isPlaying = false;
   highlight();
@@ -1126,6 +1126,9 @@ audioElement.addEventListener('pause', () => {
   if (!audioElement.ended) {
     offset = audioElement.currentTime || 0;
   }
+
+  audioElement.src = URL.createObjectURL(files[index]);
+
   isPlaying = false;
   highlight();
   updatePlaylistsButtons();
@@ -1193,7 +1196,7 @@ function onTouchStart(e) {
     touchActive = false;
     return;
   }
-  touchScrollable = e.target.closest('#filelistwrapper');
+  touchScrollable = e.target.closest('#filelistwrapper, #playlistwrapper');
   screens.forEach(s => s && s.classList.remove('animate'));
 }
 
@@ -1311,7 +1314,7 @@ document.addEventListener('visibilitychange', () => {
     audioElement.src = URL.createObjectURL(files[index]);
     audioElement.currentTime = offset;
     audioElement.play()
-  } else { //  TODO: TO BE TESTED
+  } else { //  TODO: Not Works
     audioElement.src = URL.createObjectURL(files[index]);
     audioElement.currentTime = offset;
   }
