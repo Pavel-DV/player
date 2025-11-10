@@ -284,10 +284,12 @@ async function highlight() {
   }
 
   if (file) {
+    const currentPlaylist = playlists.find(p => p.id === currentPlaylistId);
+    const playlistName = currentPlaylist ? currentPlaylist.name : '####### DELETE ME #######';
     navigator.mediaSession.metadata = new MediaMetadata({
       title: metadata.title || getDisplayName(trackName),
-      artist: metadata.artist || 'Unknown Artist',
-      album: 'Playlist',
+      artist: metadata.artist || playlistName,
+      album: playlistName,
       artwork: [
         { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', sizes: '96x96', type: 'image/png' }
       ]
@@ -591,6 +593,29 @@ function addTrackToPlaylist(fileIdx) {
   renderList();
   highlight();
   queueTracksForAnalysis([key]);
+}
+
+function addAllFilesToCurrentPlaylist() {
+  if (!files.length) return;
+  if (!currentPlaylistId) ensureDefaultPlaylist();
+  const p = playlists.find(x => x.id === currentPlaylistId);
+  if (!p) return;
+  const existing = new Set(p.items);
+  const newKeys = [];
+  files.forEach(file => {
+    const key = getFileKey(file);
+    if (!existing.has(key)) {
+      p.items.push(key);
+      existing.add(key);
+      newKeys.push(key);
+    }
+  });
+  if (!newKeys.length) return;
+  savePlaylists();
+  renderPlaylistView();
+  renderList();
+  highlight();
+  queueTracksForAnalysis(newKeys);
 }
 
 function removeTrackFromPlaylist(fileIdx) {
@@ -921,12 +946,12 @@ function play() {
     // applyVolumeForCurrentTrack();
     // setupMediaSessionHandlers();
     const playPromise = audioElement.play();
-    playPromise.then(() => {
-      isPlaying = true;
-      highlight();
-      updatePlaylistsButtons();
-      syncMediaSession();
-    }).catch(e => console.error('Play failed:', e));
+    // playPromise.then(() => {
+    //   isPlaying = true;
+    //   highlight();
+    //   updatePlaylistsButtons();
+    //   syncMediaSession();
+    // }).catch(e => console.error('Play failed:', e));
     return;
   }
 
@@ -949,8 +974,8 @@ function play() {
     highlight();
     next();
   };
-  isPlaying = true;
-  try { navigator.mediaSession.playbackState = 'playing'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
+  // isPlaying = true;
+  // try { navigator.mediaSession.playbackState = 'playing'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
   // highlight();
   // updatePlaylistsButtons();
   // syncMediaSession();
@@ -1079,14 +1104,23 @@ audioElement.addEventListener('play', () => {
     audioContext.resume();
   }
   if (gainNode) audioElement.volume = 1.0;
+  setupMediaSessionHandlers();
+});
+ 
+audioElement.addEventListener('playing', () => {
+  if (audioContext && audioContext.state === 'suspended') {
+    audioContext.resume().catch(() => {});
+  }
+  if (gainNode) audioElement.volume = 1.0;
   applyVolumeForCurrentTrack();
   isPlaying = true;
   highlight();
   updatePlaylistsButtons();
   syncMediaSession();
+  try { navigator.mediaSession.playbackState = 'playing'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
   setupMediaSessionHandlers();
 });
- 
+
 audioElement.addEventListener('pause', () => {
   console.log('🔴 audioElement PAUSE event fired');
   if (!audioElement.ended) {
@@ -1097,6 +1131,7 @@ audioElement.addEventListener('pause', () => {
   updatePlaylistsButtons();
   savePlayerState();
   syncMediaSession();
+  // try { navigator.mediaSession.playbackState = 'paused'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
 });
 
 audioElement.addEventListener('loadedmetadata', () => {
@@ -1276,6 +1311,9 @@ document.addEventListener('visibilitychange', () => {
     audioElement.src = URL.createObjectURL(files[index]);
     audioElement.currentTime = offset;
     audioElement.play()
+  } else { //  TODO: TO BE TESTED
+    audioElement.src = URL.createObjectURL(files[index]);
+    audioElement.currentTime = offset;
   }
 });
 
