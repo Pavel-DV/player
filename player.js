@@ -270,12 +270,14 @@ async function highlight() {
   if (file) {
     const currentPlaylist = playlists.find(p => p.id === currentPlaylistId);
     const playlistName = currentPlaylist ? currentPlaylist.name : '####### DELETE ME #######';
+    const defaultArtwork = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#1a1a1a"/><text x="256" y="340" font-family="system-ui,-apple-system,sans-serif" font-size="280" font-weight="700" fill="#23fd23" text-anchor="middle">V</text></svg>');
+    const artworkSrc = metadata.artwork || defaultArtwork;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: metadata.title || getDisplayName(trackName),
       artist: metadata.artist || playlistName,
       album: playlistName,
       artwork: [
-        { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', sizes: '96x96', type: 'image/png' }
+        { src: artworkSrc, sizes: '512x512', type: metadata.artwork ? 'image/jpeg' : 'image/svg+xml' }
       ]
     });
     const now = Date.now();
@@ -821,7 +823,7 @@ async function extractMetadata(file) {
   try {
     const buffer = await file.arrayBuffer();
     const view = new DataView(buffer);
-    let metadata = { title: null, artist: null };
+    let metadata = { title: null, artist: null, artwork: null };
     
     // Check ID3v2
     if (view.byteLength > 10 && view.getUint8(0) === 0x49 && view.getUint8(1) === 0x44 && view.getUint8(2) === 0x33) {
@@ -850,6 +852,29 @@ async function extractMetadata(file) {
           }
           if (frameId === 'TIT2') metadata.title = text;
           if (frameId === 'TPE1') metadata.artist = text;
+        } else if (frameId === 'APIC') {
+          try {
+            let offset = pos;
+            const encoding = view.getUint8(offset++);
+            let mimeType = '';
+            while (offset < pos + frameSize && view.getUint8(offset) !== 0) {
+              mimeType += String.fromCharCode(view.getUint8(offset++));
+            }
+            offset++;
+            const pictureType = view.getUint8(offset++);
+            while (offset < pos + frameSize && view.getUint8(offset) !== 0) offset++;
+            offset++;
+            const imageData = new Uint8Array(buffer, offset, pos + frameSize - offset);
+            let binary = '';
+            const chunkSize = 8192;
+            for (let i = 0; i < imageData.length; i += chunkSize) {
+              binary += String.fromCharCode(...imageData.subarray(i, i + chunkSize));
+            }
+            const base64 = btoa(binary);
+            metadata.artwork = `data:${mimeType || 'image/jpeg'};base64,${base64}`;
+          } catch (e) {
+            console.warn('⚠️ Failed to parse APIC frame:', e);
+          }
         }
         pos += frameSize;
       }
@@ -859,7 +884,7 @@ async function extractMetadata(file) {
     return metadata;
   } catch (e) {
     console.warn('⚠️ Failed to extract metadata for', key, ':', e);
-    return { title: null, artist: null };
+    return { title: null, artist: null, artwork: null };
   }
 }
 
