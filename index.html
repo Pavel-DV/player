@@ -101,25 +101,32 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 <button id=clearCacheBtn style="width:auto;padding:8px 16px;border-radius:8px;font-size:14px">Clear Cache</button>
 </div>
 </div>
-
+<script src="player.js"></script>
 <script>
 function refreshApp() {
     const cacheBuster = Date.now();
-  
-    navigator.serviceWorker.controller.postMessage('CLEAR_CACHE');
 
-    navigator.serviceWorker.getRegistration().then(reg => {
-        if (reg) {
-        reg.update().then(() => {
-            window.location.href = window.location.origin + window.location.pathname + '?v=' + cacheBuster;
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.controller.postMessage('CLEAR_CACHE');
+
+        navigator.serviceWorker.getRegistration().then(reg => {
+            if (reg) {
+            reg.update().then(() => {
+                window.location.href = window.location.origin + window.location.pathname + '?v=' + cacheBuster;
+            });
+            } else {
+                window.location.href = window.location.origin + window.location.pathname + '?v=' + cacheBuster;
+            }
         });
-        } else {
+    } else {
         window.location.href = window.location.origin + window.location.pathname + '?v=' + cacheBuster;
-        }
-    });
+    }
 }
+
 window.addEventListener('load', () => {
-navigator.serviceWorker.register('/sw.js').catch(() => {});
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
 });
 </script>
 </body>

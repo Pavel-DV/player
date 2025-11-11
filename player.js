@@ -66,20 +66,6 @@ function setupMediaSessionHandlers() {
   try { navigator.mediaSession.setActionHandler('stop', pause); } catch (e) { console.warn('⚠️ stop handler not supported:', e); }
 
   try {
-    navigator.mediaSession.setActionHandler('seekbackward', () => { 
-      console.log('seekbackward function');
-      audioElement.currentTime = Math.max(0, audioElement.currentTime - 10); 
-    });
-  } catch (e) { console.warn('⚠️ seekbackward handler not supported:', e); }
-
-  try {
-    navigator.mediaSession.setActionHandler('seekforward', () => { 
-      console.log('seekforward function');
-      audioElement.currentTime = Math.min(audioElement.duration || audioElement.currentTime + 10, audioElement.currentTime + 10); 
-    });
-  } catch (e) { console.warn('⚠️ seekforward handler not supported:', e); }
-
-  try {
     navigator.mediaSession.setActionHandler('seekto', (e) => {
       console.log('seekto function');
       if (typeof e.seekTime === 'number') audioElement.currentTime = Math.max(0, e.seekTime);
