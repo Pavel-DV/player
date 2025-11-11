@@ -22,6 +22,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+  
+  // Bypass cache if version parameter exists
+  if (url.searchParams.has('v')) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+  
   e.respondWith(
     caches.match(e.request).then(res => res || fetch(e.request))
   );
