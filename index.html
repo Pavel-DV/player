@@ -105,43 +105,24 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 <script src="player.js"></script>
 <script>
 function refreshApp() {
+  const cacheBuster = Date.now();
+  
+  // Clear all caches
+  if ('caches' in window) {
+    caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
+  }
+  
+  // Unregister service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistration().then(reg => {
-      if (!reg) {
-        window.location.reload();
-        return;
-      }
-      const reloadPage = () => {
-        window.location.reload();
-      };
-      const waitForActivation = (worker) => {
-        if (!worker) {
-          reloadPage();
-          return;
-        }
-        if (worker.state === 'activated') {
-          reloadPage();
-          return;
-        }
-        worker.addEventListener('statechange', () => {
-          if (worker.state === 'activated') {
-            reloadPage();
-          }
-        });
-      };
-      reg.update().then(() => {
-        if (reg.installing) {
-          waitForActivation(reg.installing);
-        } else if (reg.waiting) {
-          waitForActivation(reg.waiting);
-        } else {
-          reloadPage();
-        }
-      }).catch(reloadPage);
+      if (reg) reg.unregister();
     });
-  } else {
-    window.location.reload();
   }
+  
+  // Force reload with cache busting
+  setTimeout(() => {
+    window.location.href = window.location.origin + window.location.pathname + '?v=' + cacheBuster;
+  }, 100);
 }
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
