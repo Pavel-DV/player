@@ -69,9 +69,11 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 </div>
 
 <div id=screen2>
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:20px">
-        <h1 id=trackTitle>—</h1>
-        <span id=gainInfo style="color:#666;font-size:14px"></span>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:12px 20px">
+        <img id=trackArtwork style="width:140px;height:140px;border-radius:8px;margin-bottom:12px;display:none">
+        <h1 id=trackTitle style="margin:0;font-size:22px">—</h1>
+        <span id=trackArtist style="color:#999;font-size:16px;margin-top:6px"></span>
+        <span id=gainInfo style="color:#666;font-size:13px;margin-top:4px"></span>
     </div>
     <audio id=audioElement controls preload="none" x-webkit-airplay="allow" webkit-playsinline playsinline style="width:65%;margin:0 auto 20px;display:block;transform:scale(1.53);transform-origin:center"></audio>
     <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:20px">

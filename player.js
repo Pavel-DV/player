@@ -2,6 +2,8 @@ const audioElement = document.getElementById('audioElement');
 const fileInput = document.getElementById('dir');
 const listEl = document.getElementById('playlist');
 const trackTitleEl = document.getElementById('trackTitle');
+const trackArtistEl = document.getElementById('trackArtist');
+const trackArtworkEl = document.getElementById('trackArtwork');
 const gainInfoEl = document.getElementById('gainInfo');
 const playlistsEl = document.getElementById('playlists');
 const playlistViewEl = document.getElementById('playlistView');
@@ -41,6 +43,10 @@ let audioContext = null;
 let gainNode = null;
 let audioSourceNode = null;
 
+let lastMediaSessionSync = 0;
+const MEDIA_SESSION_SYNC_MS = 1000;
+const delayMs = 10;
+
 function refreshAudioElementLayout() {
   audioElement.style.visibility = 'hidden';
 
@@ -53,22 +59,38 @@ function setupMediaSessionHandlers() {
   console.log('🎵 Setting up Media Session handlers');
   
   navigator.mediaSession.setActionHandler('play', () => {
+    console.log('🎵 mediaSession play handler');
     play();
   });
   
   navigator.mediaSession.setActionHandler('pause', () => {
-    pause();
+    console.log('🎵 mediaSession pause handler');
+    // pause2();  // if audioElement is paused, it can not resume on lock screen.
+    pause(); // better for resume on lock screen
+    // audioElement.pause();  // if audioElement is paused, it can not resume on lock screen.
+
+  });
+
+  navigator.mediaSession.setActionHandler('previoustrack', () => { 
+    console.log('🎵 mediaSession previoustrack handler');
+    prev();
+  });
+
+  navigator.mediaSession.setActionHandler('nexttrack', () => {
+    console.log('🎵 mediaSession nexttrack handler');
+    next();
   });
   
-  navigator.mediaSession.setActionHandler('previoustrack', prev);
-  navigator.mediaSession.setActionHandler('nexttrack', next);
-  
-  try { navigator.mediaSession.setActionHandler('stop', pause); } catch (e) { console.warn('⚠️ stop handler not supported:', e); }
+  try { navigator.mediaSession.setActionHandler('stop', () => {
+    console.log('🎵 mediaSession stop handler');
+    pause();
+  }); } catch (e) { console.warn('⚠️ stop handler not supported:', e); }
 
   try {
     navigator.mediaSession.setActionHandler('seekto', (e) => {
-      console.log('seekto function');
-      if (typeof e.seekTime === 'number') audioElement.currentTime = Math.max(0, e.seekTime);
+      console.log('🎵 mediaSession seekto handler');
+      if (typeof e.seekTime === 'number') offset = Math.max(0, e.seekTime);
+      audioElement.currentTime = offset;
     });
   } catch (e) { console.warn('⚠️ seekto handler not supported:', e); }
 }
@@ -77,9 +99,7 @@ function initWebAudio() {
   if (audioContext) return;
 
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-
-    audioContext = new AudioContext();
+    audioContext = new window.AudioContext();
     
     if (audioContext.state === 'suspended') {
       audioContext.resume();
@@ -131,10 +151,8 @@ fileInput.onchange = (event) => {
   );
   
   const currentTrackKey = files[index] ? getFileKey(files[index]) : null;
-  const wasPlaying = isPlaying;
   
   // Append new files to existing ones
-  const startIdx = files.length;
   files = [...files, ...selectedFiles];
   
   // Rebuild index map
@@ -153,11 +171,9 @@ fileInput.onchange = (event) => {
   highlight();
   renderPlaylistView();
   
-  // Queue current playlist tracks for analysis
-  const currentPlaylist = playlists.find(p => p.id === currentPlaylistId);
-  if (currentPlaylist && Array.isArray(currentPlaylist.items)) {
-    queueTracksForAnalysis(currentPlaylist.items);
-  }
+  // Queue new files for analysis
+  const newFileKeys = selectedFiles.map(getFileKey);
+  queueTracksForAnalysis(newFileKeys);
   
   // Reset input so same folder can be selected again
   event.target.value = '';
@@ -210,7 +226,7 @@ function renderList() {
     playSpan.style.lineHeight = '1.2';
     playSpan.onclick = () => { 
       if (itemIndex === index && isPlaying) {
-        pause();
+        pause2();
       } else {
         startTrack(itemIndex);
       }
@@ -243,13 +259,30 @@ async function highlight() {
   
   if (trackTitleEl) {
     if (file) {
-      let display = metadata.title || getDisplayName(trackName);
-      if (metadata.artist) display += ` - ${metadata.artist}`;
-      trackTitleEl.textContent = display;
+      trackTitleEl.textContent = metadata.title || getDisplayName(trackName);
       trackTitleEl.style.color = isPlaying ? '#23fd23' : '';
     } else {
       trackTitleEl.textContent = '—';
       trackTitleEl.style.color = '';
+    }
+  }
+
+  if (trackArtistEl) {
+    if (file) {
+      const currentPlaylist = playlists.find(p => p.id === currentPlaylistId);
+      const playlistName = currentPlaylist ? currentPlaylist.name : 'no playlist';
+      trackArtistEl.textContent = metadata.artist || playlistName;
+    } else {
+      trackArtistEl.textContent = '';
+    }
+  }
+  
+  if (trackArtworkEl) {
+    if (file && metadata.artwork) {
+      trackArtworkEl.src = metadata.artwork;
+      trackArtworkEl.style.display = 'block';
+    } else {
+      trackArtworkEl.style.display = 'none';
     }
   }
   
@@ -269,7 +302,7 @@ async function highlight() {
 
   if (file) {
     const currentPlaylist = playlists.find(p => p.id === currentPlaylistId);
-    const playlistName = currentPlaylist ? currentPlaylist.name : '####### DELETE ME #######';
+    const playlistName = currentPlaylist ? currentPlaylist.name : 'no playlist';
     const defaultArtwork = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#1a1a1a"/><text x="256" y="340" font-family="system-ui,-apple-system,sans-serif" font-size="280" font-weight="700" fill="#23fd23" text-anchor="middle">V</text></svg>');
     const artworkSrc = metadata.artwork || defaultArtwork;
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -298,7 +331,7 @@ function syncMediaSession() {
       navigator.mediaSession.setPositionState({ 
         duration: Math.max(0, duration), 
         playbackRate: Math.max(0.1, rate), 
-        position: Math.max(0, Math.min(position, duration))
+        position: Math.min(position, duration)
       });
     }
     navigator.mediaSession.playbackState = audioElement.paused ? 'paused' : 'playing';
@@ -306,10 +339,6 @@ function syncMediaSession() {
     console.error('syncMediaSession error:', e);
   }
 }
-
-// Throttled position sync for lock screen/car progress bar
-let lastMediaSessionSync = 0;
-const MEDIA_SESSION_SYNC_MS = 1000;
 
 function renderPlaylists() {
   if (!playlistsEl) {
@@ -549,7 +578,7 @@ function renderPlaylistView() {
       }
       const nowCurrentKey = files[index] ? getFileKey(files[index]) : null;
       if (key === nowCurrentKey && isPlaying) {
-        pause();
+        pause2();
       } else {
         startTrack(fileIndexByKey.get(key));
       }
@@ -622,7 +651,6 @@ function removeTrackFromPlaylist(fileIdx) {
   }
   
   const removingCurrentTrack = key === (files[index] ? getFileKey(files[index]) : null);
-  const wasPlaying = removingCurrentTrack && isPlaying;
   
   p.items.splice(idx, 1);
   savePlaylists();
@@ -709,7 +737,6 @@ function loadPlayerState(playlistId) {
   return { trackKey: null, offset: 0 };
 }
 
-
 function loadNormInfo(trackKey) {
   try {
     const all = JSON.parse(localStorage.getItem('normInfo') || '{}');
@@ -730,15 +757,9 @@ function saveNormInfo(trackKey, peak) {
   }
 }
 
-
 async function analyzePeakWithWebAudio(file) {
   try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) {
-      console.warn('⚠️ analyzePeakWithWebAudio: AudioContext not available');
-      return null;
-    }
-    const ctx = new Ctx();
+    const ctx = new window.AudioContext();
     const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await new Promise((resolve, reject) => ctx.decodeAudioData(arrayBuffer, resolve, reject));
     const peak = analyzePeak(audioBuffer);
@@ -753,7 +774,9 @@ async function analyzePeakWithWebAudio(file) {
 async function processAnalysisQueue() {
   if (isAnalyzing || analysisQueue.length === 0) return;
   isAnalyzing = true;
-  
+
+  console.log('>> analysisQueue: ', analysisQueue);
+
   while (analysisQueue.length > 0) {
     const trackKey = analysisQueue.shift();
     const fileIdx = fileIndexByKey.get(trackKey);
@@ -766,6 +789,8 @@ async function processAnalysisQueue() {
     if (cached) continue;
     
     const peak = await analyzePeakWithWebAudio(files[fileIdx]);
+    console.log({ trackKey, peak });
+
     if (typeof peak === 'number' && peak > 0) {
       saveNormInfo(trackKey, peak);
       
@@ -776,7 +801,9 @@ async function processAnalysisQueue() {
       }
     }
   }
-  
+
+  console.log('>> analysisQueue after: ', analysisQueue);
+
   isAnalyzing = false;
 }
 
@@ -823,7 +850,7 @@ async function extractMetadata(file) {
   try {
     const buffer = await file.arrayBuffer();
     const view = new DataView(buffer);
-    let metadata = { title: null, artist: null, artwork: null };
+    const metadata = { title: null, artist: null, artwork: null };
     
     // Check ID3v2
     if (view.byteLength > 10 && view.getUint8(0) === 0x49 && view.getUint8(1) === 0x44 && view.getUint8(2) === 0x33) {
@@ -888,19 +915,15 @@ async function extractMetadata(file) {
   }
 }
 
-
-
 function kill() {
-  if (!isPlaying) {
-    console.log('⚠️ kill: nothing to kill, playback already stopped');
-    return;
-  }
+  console.log('⚠️ kill');
   isPlaying = false;
-  // audioElement.pause();
   audioElement.src = '';
 }
 
 function applyVolumeForCurrentTrack() {
+  if (gainNode === null) return;
+
   const file = files[index];
   if (!file) {
     console.warn('⚠️ applyVolumeForCurrentTrack: no file at current index', index);
@@ -943,7 +966,7 @@ function play() {
     console.error('❌ play: no file at current index', index);
     return;
   }
-  
+ 
   const hasSrc = audioElement.src && audioElement.src.startsWith('blob:');
   if (hasSrc && audioElement.paused && !audioElement.ended) {
     try {
@@ -954,7 +977,8 @@ function play() {
     if (gainNode) audioElement.volume = 1.0;
     // applyVolumeForCurrentTrack();
     // setupMediaSessionHandlers();
-    const playPromise = audioElement.play();
+    console.log('▶️ audioElement.play() - resuming same track');
+    const playPromise = audioElement.play().catch(e => console.error('❌ Play failed:', e));;
     // playPromise.then(() => {
     //   isPlaying = true;
     //   highlight();
@@ -974,7 +998,8 @@ function play() {
   // Ensure Media Session handlers are ready BEFORE we start playback so that lock-screen controls work right away
   // setupMediaSessionHandlers();
 
-  audioElement.play();
+  console.log('▶️ audioElement.play() - new track from play()');
+  audioElement.play().catch(e => console.error('❌ Play failed:', e));
   audioElement.onended = () => {
     if (sequenceId !== playSequence) return;
     isPlaying = false;
@@ -990,6 +1015,20 @@ function play() {
   // syncMediaSession();
 }
 
+function pause2() {
+  console.log('⏸ PAUSE2 function');
+  audioElement.pause();
+  offset = audioElement.currentTime || 0; //  TODO: Move to event listener?
+  setTimeout(() => {
+    try {
+      audioElement.src = URL.createObjectURL(files[index]); //  TODO: Move to event listener?
+      audioElement.currentTime = offset; //  restore after change src
+    } catch (e) {
+      console.error('❌ Failed to set audio element source:', e);
+    }
+  }, delayMs);
+}
+
 function pause() {
   console.log('⏸ PAUSE function');
 
@@ -1000,7 +1039,12 @@ function pause() {
   // }
 
   offset = audioElement.currentTime || 0; //  TODO: Move to event listener?
-  audioElement.src = URL.createObjectURL(files[index]); //  TODO: Move to event listener?
+  try {
+    audioElement.src = URL.createObjectURL(files[index]); //  TODO: Move to event listener?
+    audioElement.currentTime = offset;  //  restore after change src
+  } catch (e) {
+    console.error('❌ Failed to set audio element source:', e);
+  }
 
   isPlaying = false;
   highlight();
@@ -1083,7 +1127,7 @@ window.player = { play, pause, next, prev, toggleShuffle, toggleNormalize, goToL
 // Sync state when user uses native controls
 let isSettingSrc = false;
 audioElement.addEventListener('play', () => {
-  console.log('play event');
+  console.log('🔴 audioElement play event, currentTime: ', audioElement.currentTime, 'offset: ', offset);
   // Skip recursive calls but allow handler setup
   if (!audioElement.src || audioElement.src === window.location.href) {
     if (files[index] && !isSettingSrc) {
@@ -1098,6 +1142,7 @@ audioElement.addEventListener('play', () => {
       audioElement.currentTime = offset;
       if (gainNode) audioElement.volume = 1.0;
       applyVolumeForCurrentTrack();
+      console.log('▶️ audioElement.play() - play event listener');
       audioElement.play().then(() => {
         isSettingSrc = false;
       }).catch((e) => {
@@ -1107,6 +1152,9 @@ audioElement.addEventListener('play', () => {
     } else {
       console.warn('⚠️ play event: no valid source or already setting src');
     }
+  } else {
+    // audioElement.currentTime = offset;  //  restore after change src on visibilitychange event
+    // No, because of the audio element seekto 
   }
   
   // if (audioContext && audioContext.state === 'suspended') {
@@ -1116,10 +1164,11 @@ audioElement.addEventListener('play', () => {
   // setupMediaSessionHandlers();
 
 // in addEventListener('playing'
+  console.log('>> currentTime: ', audioElement.currentTime, 'offset: ', offset);
 });
  
 audioElement.addEventListener('playing', () => {
-  console.log('playing event');
+  console.log('🔴 audioElement playing event, currentTime: ', audioElement.currentTime, 'offset: ', offset);
   if (audioContext && audioContext.state === 'suspended') {
     audioContext.resume();
   }
@@ -1131,15 +1180,24 @@ audioElement.addEventListener('playing', () => {
   syncMediaSession();
   try { navigator.mediaSession.playbackState = 'playing'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
   setupMediaSessionHandlers();
+  console.log('>> currentTime: ', audioElement.currentTime, 'offset: ', offset);
+
 });
 
 audioElement.addEventListener('pause', () => {
   console.log('🔴 audioElement PAUSE event fired');
-  if (!audioElement.ended) {
-    offset = audioElement.currentTime || 0;
-  }
+  // if (!audioElement.ended) {
+  offset = audioElement.currentTime || 0;
+  // }
 
-  // audioElement.src = URL.createObjectURL(files[index]);
+  // setTimeout(() => {
+  //   try {
+  //     audioElement.src = URL.createObjectURL(files[index]); //  TODO: Move to event listener?
+  //     audioElement.currentTime = offset;
+  //   } catch (e) {
+  //     console.error('❌ Failed to set audio element source:', e);
+  //   }
+  // }, delayMs);
 
   isPlaying = false;
   highlight();
@@ -1150,6 +1208,7 @@ audioElement.addEventListener('pause', () => {
 });
 
 audioElement.addEventListener('loadedmetadata', () => {
+  console.log('🔴 audioElement loadedmetadata event');
   syncMediaSession();
 });
 
@@ -1277,7 +1336,7 @@ document.addEventListener('touchend', onTouchEnd, {passive: true});
 if (trackTitleEl) {
   trackTitleEl.onclick = () => {
     if (isPlaying) {
-      pause();
+      pause2();
     } else if (files[index]) {
       play();
     }
@@ -1322,7 +1381,7 @@ setupMediaSessionHandlers();
 document.addEventListener('visibilitychange', () => {
   console.log('visibilitychange');
 
-  if (audioContext && document.hidden && isPlaying) {
+  if (audioContext && document.hidden && isPlaying) { // went to lock screen and playing
     setTimeout(() => {
       if (audioContext.state !== 'running') {
         audioContext.resume();
@@ -1330,19 +1389,33 @@ document.addEventListener('visibilitychange', () => {
         offset = audioElement.currentTime || 0;
         audioElement.src = URL.createObjectURL(files[index]);
         audioElement.currentTime = offset;
-        audioElement.play()
+        console.log('▶️ audioElement.play() - visibilitychange (hidden & playing)');
+        audioElement.play().catch(e => console.error('❌ Play failed:', e));
       }
-    }, 100);
-  } else if (audioContext && document.hidden && !isPlaying) { //  TODO: Not Works?
+    }, delayMs);
+  } else if (audioContext && document.hidden && !isPlaying) { //  Works now
     audioContext.resume();
+    audioElement.play().catch(e => console.error('❌ Play failed:', e));
+    console.log('▶️ audioElement.play() - visibilitychange (hidden & not playing)');
 
-    offset = audioElement.currentTime || 0;
-    audioElement.src = URL.createObjectURL(files[index]);
-    audioElement.currentTime = offset;
-    audioElement.play()
+    // offset = audioElement.currentTime || 0;
+    // audioElement.src = URL.createObjectURL(files[index]);
+    // audioElement.currentTime = offset;  //  restore after change srcin play event listener
 
     pause();
+
+    setTimeout(() => {
+      console.log('isPlaying = false');
+      isPlaying = false;  // restore after audioElement playing event
+    }, delayMs);
     // try { navigator.mediaSession.playbackState = 'paused'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
+  } else if (audioContext && !document.hidden && !isPlaying) { // update audio element play/pause button
+    console.log('audioElement.play()');
+    audioElement.play().then(() => {
+      // console.log('audioElement.pause()');
+      // audioElement.pause();
+      pause2();
+    }).catch(e => console.error('❌ Play failed:', e));
   }
 });
 
