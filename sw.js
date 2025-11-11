@@ -26,3 +26,13 @@ self.addEventListener('fetch', e => {
     caches.match(e.request).then(res => res || fetch(e.request))
   );
 });
+
+self.addEventListener('message', e => {
+  if (e.data === 'CLEAR_CACHE') {
+    e.waitUntil(
+      caches.keys().then(keys => 
+        Promise.all(keys.map(key => caches.delete(key)))
+      ).then(() => self.skipWaiting())
+    );
+  }
+});
