@@ -41,6 +41,14 @@ let audioContext = null;
 let gainNode = null;
 let audioSourceNode = null;
 
+function refreshAudioElementLayout() {
+  audioElement.style.visibility = 'hidden';
+
+  requestAnimationFrame(() => {
+    audioElement.style.visibility = '';
+  });
+}
+
 function setupMediaSessionHandlers() {
   console.log('🎵 Setting up Media Session handlers');
   
@@ -128,17 +136,7 @@ function startTrack(i) {
   offset = 0;
   kill();
   play();
-  highlight();
-}
-
-function previewTrack(i) {
-  if (typeof i !== 'number') {
-    console.error('❌ previewTrack: invalid track index:', i);
-    return;
-  }
-  index = i;
-  offset = 0;
-  highlight();
+  // highlight();
 }
 
 fileInput.onchange = (event) => {
@@ -1156,6 +1154,9 @@ function setScreen(nextScreen) {
   currentScreen = Math.max(1, Math.min(screens.length || 1, nextScreen));
   document.body.setAttribute('data-screen', String(currentScreen));
   applyTransforms(0);
+  if (currentScreen === 2) {
+    refreshAudioElementLayout();
+  }
 }
 
 function applyTransforms(dx) {
@@ -1310,16 +1311,27 @@ setupMediaSessionHandlers();
 document.addEventListener('visibilitychange', () => {
   console.log('visibilitychange');
 
-  if (audioContext && document.hidden && isPlaying && audioContext.state !== 'running') {
+  if (audioContext && document.hidden && isPlaying) {
+    setTimeout(() => {
+      if (audioContext.state !== 'running') {
+        audioContext.resume();
+
+        offset = audioElement.currentTime || 0;
+        audioElement.src = URL.createObjectURL(files[index]);
+        audioElement.currentTime = offset;
+        audioElement.play()
+      }
+    }, 100);
+  } else if (audioContext && document.hidden && !isPlaying) { //  TODO: Not Works?
     audioContext.resume();
 
     offset = audioElement.currentTime || 0;
     audioElement.src = URL.createObjectURL(files[index]);
     audioElement.currentTime = offset;
     audioElement.play()
-  } else if (audioContext && document.hidden && !isPlaying) { //  TODO: Not Works?
-    audioElement.src = URL.createObjectURL(files[index]);
-    audioElement.currentTime = offset;
+
+    pause();
+    // try { navigator.mediaSession.playbackState = 'paused'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
   }
 });
 
