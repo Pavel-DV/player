@@ -65,10 +65,9 @@ function setupMediaSessionHandlers() {
   
   navigator.mediaSession.setActionHandler('pause', () => {
     console.log('🎵 mediaSession pause handler');
-    // pause2();  // if audioElement is paused, it can not resume on lock screen.
-    pause(); // better for resume on lock screen
+    pause();                  // better for resume on lock screen, not used audioElement.pause()
+    // pause2();              // if audioElement is paused, it can not resume on lock screen.
     // audioElement.pause();  // if audioElement is paused, it can not resume on lock screen.
-
   });
 
   navigator.mediaSession.setActionHandler('previoustrack', () => { 
@@ -81,18 +80,28 @@ function setupMediaSessionHandlers() {
     next();
   });
   
-  try { navigator.mediaSession.setActionHandler('stop', () => {
+  navigator.mediaSession.setActionHandler('stop', () => {
     console.log('🎵 mediaSession stop handler');
     pause();
-  }); } catch (e) { console.warn('⚠️ stop handler not supported:', e); }
+  });
 
-  try {
-    navigator.mediaSession.setActionHandler('seekto', (e) => {
-      console.log('🎵 mediaSession seekto handler');
-      if (typeof e.seekTime === 'number') offset = Math.max(0, e.seekTime);
-      audioElement.currentTime = offset;
-    });
-  } catch (e) { console.warn('⚠️ seekto handler not supported:', e); }
+  navigator.mediaSession.setActionHandler('seekto', (e) => {
+    console.log('🎵 mediaSession seekto handler');
+    if (typeof e.seekTime === 'number') offset = Math.max(0, e.seekTime);
+    audioElement.currentTime = offset;
+  });
+
+  navigator.mediaSession.setActionHandler('seekbackward', (e) => {
+    console.log('🎵 mediaSession seekbackward handler', e);
+  });
+
+  navigator.mediaSession.setActionHandler('seekforward', (e) => {
+    console.log('🎵 mediaSession seekforward handler', e);
+  });
+
+  navigator.mediaSession.setActionHandler('skipad', () => {
+    console.log('🎵 mediaSession skipad handler');
+  });
 }
 
 function initWebAudio() {
@@ -974,7 +983,7 @@ function play() {
     } catch (e) {
       console.error('Set current time failed:', e);
     }
-    if (gainNode) audioElement.volume = 1.0;
+    // if (gainNode) audioElement.volume = 1.0;
     // applyVolumeForCurrentTrack();
     // setupMediaSessionHandlers();
     console.log('▶️ audioElement.play() - resuming same track');
@@ -992,7 +1001,7 @@ function play() {
   const blobUrl = URL.createObjectURL(file);
   audioElement.src = blobUrl;
   audioElement.currentTime = offset;
-  if (gainNode) audioElement.volume = 1.0;
+  // if (gainNode) audioElement.volume = 1.0;
   // applyVolumeForCurrentTrack();
 
   // Ensure Media Session handlers are ready BEFORE we start playback so that lock-screen controls work right away
@@ -1140,7 +1149,7 @@ audioElement.addEventListener('play', () => {
       const blobUrl = URL.createObjectURL(files[index]);
       audioElement.src = blobUrl;
       audioElement.currentTime = offset;
-      if (gainNode) audioElement.volume = 1.0;
+      // if (gainNode) audioElement.volume = 1.0;
       applyVolumeForCurrentTrack();
       console.log('▶️ audioElement.play() - play event listener');
       audioElement.play().then(() => {
@@ -1172,39 +1181,58 @@ audioElement.addEventListener('playing', () => {
   if (audioContext && audioContext.state === 'suspended') {
     audioContext.resume();
   }
-  if (gainNode) audioElement.volume = 1.0;
+  // if (gainNode) audioElement.volume = 1.0;
   applyVolumeForCurrentTrack();
   isPlaying = true;
   highlight();
   updatePlaylistsButtons();
   syncMediaSession();
   try { navigator.mediaSession.playbackState = 'playing'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
-  setupMediaSessionHandlers();
+  // setupMediaSessionHandlers();
   console.log('>> currentTime: ', audioElement.currentTime, 'offset: ', offset);
-
 });
 
 audioElement.addEventListener('pause', () => {
-  console.log('🔴 audioElement PAUSE event fired');
-  // if (!audioElement.ended) {
-  offset = audioElement.currentTime || 0;
-  // }
+  console.log('🔴 audioElement PAUSE event');
+  // // if (!audioElement.ended) {
+  // offset = audioElement.currentTime || 0;
+  // // }
 
-  // setTimeout(() => {
-  //   try {
-  //     audioElement.src = URL.createObjectURL(files[index]); //  TODO: Move to event listener?
-  //     audioElement.currentTime = offset;
-  //   } catch (e) {
-  //     console.error('❌ Failed to set audio element source:', e);
-  //   }
-  // }, delayMs);
 
-  isPlaying = false;
-  highlight();
-  updatePlaylistsButtons();
-  savePlayerState();
-  syncMediaSession();
-  // try { navigator.mediaSession.playbackState = 'paused'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
+  
+
+
+
+  if (document.hidden) {
+    audioContext.resume();
+    console.log('▶️ audioElement.play() - audioElement PAUSE event');
+    audioElement.play().then(() => {
+      pause();
+
+      setTimeout(() => {
+        console.log('isPlaying = false');
+        isPlaying = false;  // restore after audioElement playing event
+      }, delayMs);
+    }).catch(e => console.error('❌ Play failed:', e));
+
+    // offset = audioElement.currentTime || 0;
+    // audioElement.src = URL.createObjectURL(files[index]);
+    // audioElement.currentTime = offset;  //  restore after change srcin play event listener
+
+
+
+
+
+
+
+  } else {
+    isPlaying = false;
+    highlight();
+    updatePlaylistsButtons();
+    savePlayerState();
+    syncMediaSession();
+    // try { navigator.mediaSession.playbackState = 'paused'; } catch (e) { console.error('❌ Failed to set playback state:', e); }
+  }
 });
 
 audioElement.addEventListener('loadedmetadata', () => {
@@ -1379,7 +1407,11 @@ loadSettings();
 setupMediaSessionHandlers();
 
 document.addEventListener('visibilitychange', () => {
-  console.log('visibilitychange');
+  if (document.hidden) {
+    console.log('visibilitychange (hidden) _______');
+  } else {
+    console.log('visibilitychange (visible) ^^^^^^^^');
+  }
 
   if (audioContext && document.hidden && isPlaying) { // went to lock screen and playing
     setTimeout(() => {

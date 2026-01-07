@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Background Audio Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    button {
+      background: #23fd23;
+      color: #000;
+      border: none;
+      padding: 12px 24px;
+      margin: 10px 5px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:active {
+      opacity: 0.7;
+    }
+    #status {
+      margin: 20px 0;
+      padding: 15px;
+      background: #2a2a2a;
+      border-radius: 8px;
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    input[type="range"] {
+      width: 100%;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Background Audio Test</h1>
+  <p>Test playing audio in the background on iOS/Safari.</p>
+
+  <div class="controls">
+    <button id="initBtn">Initialize Audio</button>
+    <button id="playBtn" disabled>Play Music</button>
+    <button id="pauseBtn" disabled>Pause</button>
+  </div>
+
+  <div id="status">
+    <strong>Status:</strong> Not initialized
+  </div>
+
+  <audio id="audioElement" preload="metadata"></audio>
+
+  <script>
+    const audioElement = document.getElementById('audioElement');
+    const initBtn = document.getElementById('initBtn');
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const statusEl = document.getElementById('status');
+    
+    let audioContext = null;
+    let silentNode = null;
+    let isInitialized = false;
+
+    function updateStatus(msg) {
+      statusEl.innerHTML = `<strong>Status:</strong> ${msg}`;
+    }
+
+    // Create silent audio loop to keep audio context alive
+    function createSilentLoop() {
+      if (!audioContext) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContext();
+      }
+
+      // Resume audio context if suspended
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+
+      // Create a silent buffer (1 second of silence)
+      const buffer = audioContext.createBuffer(1, audioContext.sampleRate, audioContext.sampleRate);
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(audioContext.destination);
+      source.start(0);
+      
+      silentNode = source;
+      updateStatus('Silent loop created. Audio context active.');
+    }
+
+    // Initialize Media Session API for background playback
+    function setupMediaSession() {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: 'Background Test',
+          artist: 'Test Player',
+          album: 'Test',
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => {
+          audioElement.play();
+        });
+
+        navigator.mediaSession.setActionHandler('pause', () => {
+          audioElement.pause();
+        });
+
+        updateStatus('Media Session API configured.');
+      }
+    }
+
+    // Initialize everything
+    initBtn.addEventListener('click', async () => {
+      try {
+        // Create silent loop to keep audio context active
+        createSilentLoop();
+        
+        // Setup Media Session
+        setupMediaSession();
+        
+        // Use a test audio file (generate a short beep)
+        // In production, replace with actual audio file
+        const testAudioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+        audioElement.src = testAudioUrl;
+        
+        await audioElement.load();
+        
+        isInitialized = true;
+        initBtn.disabled = true;
+        playBtn.disabled = false;
+        pauseBtn.disabled = false;
+        
+        updateStatus('✓ Initialized! Audio context running. Try playing and then switching to another app.');
+      } catch (err) {
+        updateStatus(`Error: ${err.message}`);
+        console.error(err);
+      }
+    });
+
+    playBtn.addEventListener('click', async () => {
+      try {
+        // Resume audio context if needed
+        if (audioContext && audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
+        
+        await audioElement.play();
+        updateStatus('▶ Playing... Try switching to another app or locking screen.');
+      } catch (err) {
+        updateStatus(`Play error: ${err.message}`);
+        console.error(err);
+      }
+    });
+
+    pauseBtn.addEventListener('click', () => {
+      audioElement.pause();
+      updateStatus('⏸ Paused');
+    });
+
+    // Monitor audio events
+    audioElement.addEventListener('play', () => {
+      console.log('Audio started playing');
+    });
+
+    audioElement.addEventListener('pause', () => {
+      console.log('Audio paused');
+    });
+
+    audioElement.addEventListener('ended', () => {
+      console.log('Audio ended');
+      updateStatus('Playback ended');
+    });
+
+    // Keep audio context alive on visibility change
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && audioContext) {
+        console.log('Page hidden, keeping audio context alive');
+        if (audioContext.state === 'suspended') {
+          audioContext.resume();
+        }
+      }
+    });
+  </script>
+</body>
+</html>
+
