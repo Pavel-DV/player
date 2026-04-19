@@ -55,11 +55,11 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 <div id=screen1>
 <div style="display:flex;align-items:center;gap:12px;margin:14px 8px 8px 8px">
 <h2 style="margin:0;font-size:24px;font-weight:600">Library</h2>
-<button onclick="document.getElementById('dir').click()" style="width:32px;height:32px;font-size:20px">＋</button>
-<button onclick="addAllFilesToCurrentPlaylist()" style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px">Add All</button>
+<button onclick="player.pickMusicDirectory()" style="width:32px;height:32px;font-size:20px">＋</button>
+<button id=addAllBtn onclick="player.addAllFilesToCurrentPlaylist()" style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px">Add All</button>
 <button onclick="refreshApp()" style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px;background:#0a84ff;color:#fff">Refresh</button>
 </div>
-    <input id=dir type=file webkitdirectory multiple style="display: none;">
+    <input id=dir type=file webkitdirectory multiple style="display:none">
     <div id="filelistwrapper">
         <div id=emptyLibraryMsg style="padding:20px;text-align:center;color:#999;font-size:14px;line-height:1.5">
             Tap + to add music files.<br>All playlists use files from this library.<br><b>Note:</b> files aren't saved, you'll need to re-add them after reload.
@@ -108,34 +108,37 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
     const urlParams = new URLSearchParams(window.location.search);
     const version = urlParams.get('v');
     const script = document.createElement('script');
+    script.type = 'module';
     script.src = version ? 'player.js?v=' + version : 'player.js';
     document.currentScript.parentNode.insertBefore(script, document.currentScript);
 })();
 
-function refreshApp() {
-    const cacheBuster = Date.now();
+async function refreshApp() {
+    const cacheBuster = String(Date.now());
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set('v', cacheBuster);
 
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.controller.postMessage('CLEAR_CACHE');
+    try {
+        if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage('CLEAR_CACHE');
+        }
 
-        navigator.serviceWorker.getRegistration().then(reg => {
-            if (reg) {
-            reg.update().then(() => {
-                window.location.href = window.location.origin + window.location.pathname + '?v=' + cacheBuster;
-            });
-            } else {
-                window.location.href = window.location.origin + window.location.pathname + '?v=' + cacheBuster;
-            }
-        });
-    } else {
-        window.location.href = window.location.origin + window.location.pathname + '?v=' + cacheBuster;
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+            await reg.update();
+        }
+    } catch (error) {
+        console.error('Failed to fully refresh app caches:', error);
     }
+
+    window.location.replace(nextUrl.toString());
 }
 
 window.addEventListener('load', () => {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
 });
 </script>
 </body>

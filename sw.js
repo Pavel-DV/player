@@ -1,8 +1,18 @@
-const CACHE_NAME = 'player-v4';
+const CACHE_NAME = 'player-v7';
 const ASSETS = [
   '/',
   '/index.html',
-  '/player.js'
+  '/player.js',
+  '/player/dom.js',
+  '/player/library.js',
+  '/player/metadata.js',
+  '/player/navigation.js',
+  '/player/normalization.js',
+  '/player/playback.js',
+  '/player/shared.js',
+  '/player/state.js',
+  '/player/storage.js',
+  '/player/ui.js'
 ];
 
 self.addEventListener('install', e => {
@@ -22,17 +32,25 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
-  
-  // Bypass cache if version parameter exists
-  if (url.searchParams.has('v')) {
-    e.respondWith(fetch(e.request));
-    return;
-  }
-  
-  e.respondWith(
-    caches.match(e.request).then(res => res || fetch(e.request))
-  );
+  e.respondWith((async () => {
+    const url = new URL(e.request.url);
+    const client = e.clientId ? await self.clients.get(e.clientId) : null;
+    const clientUrl = client ? new URL(client.url) : null;
+    const isRefreshRequest =
+      url.searchParams.has('v') || Boolean(clientUrl?.searchParams.has('v'));
+
+    if (isRefreshRequest) {
+      return fetch(e.request);
+    }
+
+    const cachedResponse = await caches.match(e.request);
+
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    return fetch(e.request);
+  })());
 });
 
 self.addEventListener('message', e => {
