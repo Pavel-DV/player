@@ -1,4 +1,8 @@
-import { RESUME_DELAY_MS, buildDefaultArtwork } from './shared.js';
+import {
+  RESUME_DELAY_MS,
+  buildDefaultArtwork,
+  setFileKey,
+} from './shared.js';
 
 function setMediaSessionPlaybackState(state) {
   if (!('mediaSession' in navigator)) {
@@ -21,11 +25,15 @@ export function createPlaybackController({
   getDisplayName,
   getQueueIndices,
   loadNormInfo,
+  saveNormInfo,
   saveSettings,
   savePlayerState,
 }) {
   let lastTimeupdateTraceAt = 0;
-  let hasBoundAudioContextStateEvents = false;
+  let currentSourceIsNormalized = false;
+  let currentSourceTrackKey = null;
+  let cachedNormalizedBlob = null;
+  let cachedNormalizedTrackKey = null;
 
   function summarizeError(error) {
     if (!error) {
@@ -320,68 +328,170 @@ export function createPlaybackController({
     tracePlayback('mediaSession.handlers.setup.end');
   }
 
-  function resumeAudioContext() {
-    if (state.audioContext?.state === 'suspended') {
-      tracePlayback('audioContext.resume.begin', {
-        state: state.audioContext.state,
-      });
+  function analyzePeak(audioBuffer) {
+    let peak = 0;
 
-      return state.audioContext.resume().catch(error => {
-        console.error('Failed to resume audio context:', error);
-        tracePlayback('audioContext.resume.failed', {
-          error: summarizeError(error),
-        });
-      });
+    for (let channelIndex = 0; channelIndex < audioBuffer.numberOfChannels; channelIndex += 1) {
+      const channelData = audioBuffer.getChannelData(channelIndex);
+
+      for (let sampleIndex = 0; sampleIndex < channelData.length; sampleIndex += 1) {
+        const absoluteSample = Math.abs(channelData[sampleIndex]);
+
+        if (absoluteSample > peak) {
+          peak = absoluteSample;
+        }
+      }
     }
 
-    return Promise.resolve();
+    return peak;
   }
 
-  function initWebAudio() {
-    if (state.audioContext || !dom.audioElement) {
-      tracePlayback('audioContext.init.skipped', {
-        hasAudioContext: Boolean(state.audioContext),
-        hasAudioElement: Boolean(dom.audioElement),
-      });
-      return;
+  function encodeAudioBufferAsWav(audioBuffer) {
+    const channelCount = audioBuffer.numberOfChannels;
+    const sampleRate = audioBuffer.sampleRate;
+    const sampleCount = audioBuffer.length;
+    const bytesPerSample = 2;
+    const dataLength = sampleCount * channelCount * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(buffer);
+    let offset = 0;
+
+    const writeString = value => {
+      for (let index = 0; index < value.length; index += 1) {
+        view.setUint8(offset, value.charCodeAt(index));
+        offset += 1;
+      }
+    };
+
+    const writeUint16 = value => {
+      view.setUint16(offset, value, true);
+      offset += 2;
+    };
+
+    const writeUint32 = value => {
+      view.setUint32(offset, value, true);
+      offset += 4;
+    };
+
+    writeString('RIFF');
+    writeUint32(36 + dataLength);
+    writeString('WAVE');
+    writeString('fmt ');
+    writeUint32(16);
+    writeUint16(1);
+    writeUint16(channelCount);
+    writeUint32(sampleRate);
+    writeUint32(sampleRate * channelCount * bytesPerSample);
+    writeUint16(channelCount * bytesPerSample);
+    writeUint16(bytesPerSample * 8);
+    writeString('data');
+    writeUint32(dataLength);
+
+    const channelData = Array.from({ length: channelCount }, (_, index) =>
+      audioBuffer.getChannelData(index)
+    );
+
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+      for (let channelIndex = 0; channelIndex < channelCount; channelIndex += 1) {
+        const sample = Math.max(-1, Math.min(1, channelData[channelIndex][sampleIndex]));
+        view.setInt16(
+          offset,
+          sample < 0 ? sample * 0x8000 : sample * 0x7fff,
+          true
+        );
+        offset += bytesPerSample;
+      }
     }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  async function buildPreparedSource(file) {
+    const trackKey = getFileKey(file);
+
+    if (!state.normalize) {
+      return {
+        isNormalized: false,
+        source: file,
+      };
+    }
+
+    if (cachedNormalizedBlob && cachedNormalizedTrackKey === trackKey) {
+      return {
+        isNormalized: true,
+        source: cachedNormalizedBlob,
+      };
+    }
+
+    const DecodeAudioContext =
+      window.AudioContext || window.webkitAudioContext;
+    const RenderAudioContext =
+      window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const decodeAudioContext = new DecodeAudioContext();
+    let audioBuffer = null;
 
     try {
-      ensurePlaybackAudioSession('audioContext.init');
-      state.audioContext = new window.AudioContext();
-
-      if (!hasBoundAudioContextStateEvents) {
-        hasBoundAudioContextStateEvents = true;
-        state.audioContext.addEventListener('statechange', () => {
-          tracePlayback('audioContext.statechange', {
-            hidden: typeof document !== 'undefined' ? document.hidden : null,
-            isPlaying: state.isPlaying,
-            state: state.audioContext?.state ?? null,
-          });
-
-          if (state.audioContext?.state === 'suspended' && state.isPlaying) {
-            tracePlayback('audioContext.statechange.resume-request', {
-              hidden: typeof document !== 'undefined' ? document.hidden : null,
-            });
-            void resumeAudioContext();
-          }
+      const arrayBuffer = await file.arrayBuffer();
+      audioBuffer = await new Promise((resolve, reject) =>
+        decodeAudioContext.decodeAudioData(arrayBuffer, resolve, reject)
+      );
+    } finally {
+      try {
+        await decodeAudioContext.close();
+      } catch (error) {
+        tracePlayback('audioContext.decode.close.failed', {
+          error: summarizeError(error),
         });
       }
-
-      state.gainNode = state.audioContext.createGain();
-      state.gainNode.gain.value = 1;
-      state.audioSourceNode = state.audioContext.createMediaElementSource(
-        dom.audioElement
-      );
-      state.audioSourceNode.connect(state.gainNode);
-      state.gainNode.connect(state.audioContext.destination);
-      tracePlayback('audioContext.init.success');
-    } catch (error) {
-      console.error('Failed to initialize Web Audio:', error);
-      tracePlayback('audioContext.init.failed', {
-        error: summarizeError(error),
-      });
     }
+
+    let peak = loadNormInfo(trackKey);
+
+    if (!(typeof peak === 'number' && peak > 0)) {
+      peak = analyzePeak(audioBuffer);
+
+      if (typeof peak === 'number' && peak > 0) {
+        saveNormInfo?.(trackKey, peak);
+      }
+    }
+
+    const multiplier =
+      typeof peak === 'number' && peak > 0 ? Math.min(1 / peak, 10) : 1;
+
+    if (!(multiplier > 1.001)) {
+      return {
+        isNormalized: false,
+        source: file,
+      };
+    }
+
+    const offlineAudioContext = new RenderAudioContext(
+      audioBuffer.numberOfChannels,
+      audioBuffer.length,
+      audioBuffer.sampleRate
+    );
+    const sourceNode = offlineAudioContext.createBufferSource();
+    const gainNode = offlineAudioContext.createGain();
+
+    sourceNode.buffer = audioBuffer;
+    gainNode.gain.value = multiplier;
+    sourceNode.connect(gainNode);
+    gainNode.connect(offlineAudioContext.destination);
+    sourceNode.start(0);
+
+    const renderedAudioBuffer = await offlineAudioContext.startRendering();
+    const normalizedBlob = setFileKey(
+      encodeAudioBufferAsWav(renderedAudioBuffer),
+      trackKey
+    );
+
+    cachedNormalizedBlob = normalizedBlob;
+    cachedNormalizedTrackKey = trackKey;
+
+    return {
+      isNormalized: true,
+      source: normalizedBlob,
+    };
   }
 
   function queueObjectUrlForRevoke(objectUrl) {
@@ -416,6 +526,9 @@ export function createPlaybackController({
       queueObjectUrlForRevoke(state.currentObjectUrl);
       state.currentObjectUrl = null;
     }
+
+    currentSourceIsNormalized = false;
+    currentSourceTrackKey = null;
   }
 
   function playForSequence(sequenceId, errorLabel) {
@@ -531,7 +644,10 @@ export function createPlaybackController({
     }, 250);
   }
 
-  function setAudioSource(file, { markInternalTransition = true } = {}) {
+  function setAudioSource(
+    file,
+    { isNormalizedSource = false, markInternalTransition = true } = {}
+  ) {
     if (!dom.audioElement) {
       return;
     }
@@ -543,8 +659,11 @@ export function createPlaybackController({
     const previousObjectUrl = state.currentObjectUrl;
     state.currentObjectUrl = URL.createObjectURL(file);
     dom.audioElement.src = state.currentObjectUrl;
+    currentSourceIsNormalized = isNormalizedSource;
+    currentSourceTrackKey = getFileKey(file);
     tracePlayback('audio.source.set', {
       hadPreviousObjectUrl: Boolean(previousObjectUrl),
+      isNormalizedSource,
       markInternalTransition,
       trackKey: getFileKey(file),
     });
@@ -558,24 +677,27 @@ export function createPlaybackController({
     const file = state.files[state.index];
 
     if (!file || !dom.audioElement) {
-      return false;
+      return Promise.resolve(false);
     }
 
-    try {
-      setAudioSource(file);
-      state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
-      tracePlayback('audio.source.restore.success', {
-        pendingStartOffset: state.pendingStartOffset,
-        trackKey: getFileKey(file),
+    return buildPreparedSource(file)
+      .then(({ isNormalized, source }) => {
+        setAudioSource(source, { isNormalizedSource: isNormalized });
+        state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
+        tracePlayback('audio.source.restore.success', {
+          isNormalizedSource: isNormalized,
+          pendingStartOffset: state.pendingStartOffset,
+          trackKey: getFileKey(file),
+        });
+        return true;
+      })
+      .catch(error => {
+        console.error('Failed to restore current track source:', error);
+        tracePlayback('audio.source.restore.failed', {
+          error: summarizeError(error),
+        });
+        return false;
       });
-      return true;
-    } catch (error) {
-      console.error('Failed to restore current track source:', error);
-      tracePlayback('audio.source.restore.failed', {
-        error: summarizeError(error),
-      });
-      return false;
-    }
   }
 
   function primeCurrentTrackSource() {
@@ -587,7 +709,7 @@ export function createPlaybackController({
         hasFile: Boolean(file),
         reason: 'missing-target',
       });
-      return false;
+      return Promise.resolve(false);
     }
 
     if (state.isPlaying) {
@@ -595,36 +717,48 @@ export function createPlaybackController({
         reason: 'already-playing',
         trackKey: getFileKey(file),
       });
-      return false;
+      return Promise.resolve(false);
     }
 
     const hasExistingSource =
       Boolean(dom.audioElement.src) && dom.audioElement.src !== window.location.href;
+    const hasMatchingExistingSource =
+      hasExistingSource &&
+      state.currentObjectUrl &&
+      currentSourceTrackKey === getFileKey(file) &&
+      currentSourceIsNormalized === state.normalize;
 
-    if (hasExistingSource && state.currentObjectUrl) {
+    if (hasMatchingExistingSource) {
       tracePlayback('audio.source.prime.skipped', {
         reason: 'existing-source',
+        isNormalizedSource: currentSourceIsNormalized,
         trackKey: getFileKey(file),
       });
-      return true;
+      return Promise.resolve(true);
     }
 
-    try {
-      setAudioSource(file, { markInternalTransition: false });
-      state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
-      state.isInternalTransition = false;
-      tracePlayback('audio.source.prime.success', {
-        pendingStartOffset: state.pendingStartOffset,
-        trackKey: getFileKey(file),
+    return buildPreparedSource(file)
+      .then(({ isNormalized, source }) => {
+        setAudioSource(source, {
+          isNormalizedSource: isNormalized,
+          markInternalTransition: false,
+        });
+        state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
+        state.isInternalTransition = false;
+        tracePlayback('audio.source.prime.success', {
+          isNormalizedSource: isNormalized,
+          pendingStartOffset: state.pendingStartOffset,
+          trackKey: getFileKey(file),
+        });
+        return true;
+      })
+      .catch(error => {
+        console.error('Failed to prime current track source:', error);
+        tracePlayback('audio.source.prime.failed', {
+          error: summarizeError(error),
+        });
+        return false;
       });
-      return true;
-    } catch (error) {
-      console.error('Failed to prime current track source:', error);
-      tracePlayback('audio.source.prime.failed', {
-        error: summarizeError(error),
-      });
-      return false;
-    }
   }
 
   function bindEndedHandler(sequenceId, source = 'unknown') {
@@ -677,17 +811,13 @@ export function createPlaybackController({
   }
 
   function applyVolumeForCurrentTrack() {
-    if (!state.gainNode) {
+    const file = state.files[state.index];
+
+    if (!file) {
       if (dom.gainInfoEl) {
         dom.gainInfoEl.textContent = '';
       }
 
-      return;
-    }
-
-    const file = state.files[state.index];
-
-    if (!file) {
       console.warn(`Cannot apply volume because there is no file at index ${state.index}`);
       return;
     }
@@ -695,8 +825,6 @@ export function createPlaybackController({
     const trackKey = getFileKey(file);
 
     if (!state.normalize) {
-      state.gainNode.gain.value = 1;
-
       if (dom.gainInfoEl) {
         dom.gainInfoEl.textContent = '';
       }
@@ -708,7 +836,6 @@ export function createPlaybackController({
 
     if (typeof peak === 'number' && peak > 0) {
       const multiplier = Math.min(1 / peak, 10);
-      state.gainNode.gain.value = multiplier;
 
       if (dom.gainInfoEl) {
         dom.gainInfoEl.textContent = `Gain: ${multiplier.toFixed(2)}x`;
@@ -716,8 +843,6 @@ export function createPlaybackController({
 
       return;
     }
-
-    state.gainNode.gain.value = 1;
 
     if (dom.gainInfoEl) {
       dom.gainInfoEl.textContent = '';
@@ -735,8 +860,6 @@ export function createPlaybackController({
 
     ensurePlaybackAudioSession('playback.play');
     setupMediaSessionHandlers();
-    initWebAudio();
-    void resumeAudioContext();
 
     const file = state.files[state.index];
 
@@ -765,10 +888,17 @@ export function createPlaybackController({
 
     const hasBlobSource =
       dom.audioElement.src && dom.audioElement.src.startsWith('blob:');
+    const canResumeExistingSource =
+      hasBlobSource &&
+      dom.audioElement.paused &&
+      !dom.audioElement.ended &&
+      currentSourceTrackKey === getFileKey(file) &&
+      (!state.normalize || currentSourceIsNormalized);
 
-    if (hasBlobSource && dom.audioElement.paused && !dom.audioElement.ended) {
+    if (canResumeExistingSource) {
       tracePlayback('playback.play.resume-existing-source', {
         hasBlobSource,
+        isNormalizedSource: currentSourceIsNormalized,
       });
       bindEndedHandler(state.playSequence, 'playback.play.resume-existing-source');
       try {
@@ -787,15 +917,37 @@ export function createPlaybackController({
     }
 
     const sequenceId = ++state.playSequence;
-    setAudioSource(file);
-    state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
-    tracePlayback('playback.play.new-source', {
-      pendingStartOffset: state.pendingStartOffset,
-      sequenceId,
-      trackKey: getFileKey(file),
-    });
-    bindEndedHandler(sequenceId, 'playback.play.new-source');
-    playWhenSourceReady(sequenceId, 'Failed to start playback:');
+    void buildPreparedSource(file)
+      .then(({ isNormalized, source }) => {
+        if (sequenceId !== state.playSequence || !dom.audioElement) {
+          tracePlayback('playback.play.new-source.skipped', {
+            reason: 'sequence-mismatch',
+            sequenceId,
+            statePlaySequence: state.playSequence,
+            trackKey: getFileKey(file),
+          });
+          return;
+        }
+
+        setAudioSource(source, { isNormalizedSource: isNormalized });
+        state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
+        tracePlayback('playback.play.new-source', {
+          isNormalizedSource: isNormalized,
+          pendingStartOffset: state.pendingStartOffset,
+          sequenceId,
+          trackKey: getFileKey(file),
+        });
+        bindEndedHandler(sequenceId, 'playback.play.new-source');
+        playWhenSourceReady(sequenceId, 'Failed to start playback:');
+      })
+      .catch(error => {
+        console.error('Failed to prepare playback source:', error);
+        tracePlayback('playback.play.new-source.failed', {
+          error: summarizeError(error),
+          sequenceId,
+          trackKey: getFileKey(file),
+        });
+      });
   }
 
   function pauseSoft() {
@@ -935,6 +1087,7 @@ export function createPlaybackController({
   function setNormalize(enabled) {
     state.normalize = Boolean(enabled);
     dom.normalizeBtn?.classList.toggle('on', state.normalize);
+    applyVolumeForCurrentTrack();
   }
 
   function toggleNormalize() {
@@ -943,7 +1096,10 @@ export function createPlaybackController({
       shuffle: state.shuffle,
       normalize: state.normalize,
     });
-    applyVolumeForCurrentTrack();
+
+    if (!state.isPlaying && dom.audioElement?.src) {
+      void restoreCurrentTrackSource();
+    }
   }
 
   function goToLibrary() {
@@ -964,8 +1120,6 @@ export function createPlaybackController({
 
       if (hasPlayableSource) {
         ensurePlaybackAudioSession('audio.event.play.active-source');
-        initWebAudio();
-        void resumeAudioContext();
         applyVolumeForCurrentTrack();
         setupMediaSessionHandlers();
         bindEndedHandler(state.playSequence, 'audio.event.play.active-source');
@@ -1108,18 +1262,6 @@ export function createPlaybackController({
         );
       }
 
-      if (
-        state.audioContext &&
-        state.audioContext.state === 'suspended' &&
-        (state.isPlaying || !document.hidden)
-      ) {
-        tracePlayback(
-          document.hidden
-            ? 'document.visibilitychange.hidden.resume-audio-context'
-            : 'document.visibilitychange.visible.resume-audio-context'
-        );
-        void resumeAudioContext();
-      }
     });
   }
 
