@@ -350,8 +350,6 @@ export function createPlaybackController({
       ensurePlaybackAudioSession('audioContext.init');
       state.audioContext = new window.AudioContext();
 
-      void resumeAudioContext();
-
       if (!hasBoundAudioContextStateEvents) {
         hasBoundAudioContextStateEvents = true;
         state.audioContext.addEventListener('statechange', () => {
@@ -966,6 +964,9 @@ export function createPlaybackController({
 
       if (hasPlayableSource) {
         ensurePlaybackAudioSession('audio.event.play.active-source');
+        initWebAudio();
+        void resumeAudioContext();
+        applyVolumeForCurrentTrack();
         setupMediaSessionHandlers();
         bindEndedHandler(state.playSequence, 'audio.event.play.active-source');
       }
@@ -1018,7 +1019,6 @@ export function createPlaybackController({
       }
 
       state.pendingStartOffset = null;
-      void resumeAudioContext();
       applyVolumeForCurrentTrack();
       state.isPlaying = true;
       void ui.highlight();
