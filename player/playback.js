@@ -25,7 +25,6 @@ export function createPlaybackController({
   savePlayerState,
 }) {
   let lastTimeupdateTraceAt = 0;
-  let hasBoundAudioContextStateEvents = false;
 
   function summarizeError(error) {
     if (!error) {
@@ -346,44 +345,11 @@ export function createPlaybackController({
       return;
     }
 
-    try {
-      ensurePlaybackAudioSession('audioContext.init');
-      state.audioContext = new window.AudioContext();
-
-      void resumeAudioContext();
-
-      if (!hasBoundAudioContextStateEvents) {
-        hasBoundAudioContextStateEvents = true;
-        state.audioContext.addEventListener('statechange', () => {
-          tracePlayback('audioContext.statechange', {
-            hidden: typeof document !== 'undefined' ? document.hidden : null,
-            isPlaying: state.isPlaying,
-            state: state.audioContext?.state ?? null,
-          });
-
-          if (state.audioContext?.state === 'suspended' && state.isPlaying) {
-            tracePlayback('audioContext.statechange.resume-request', {
-              hidden: typeof document !== 'undefined' ? document.hidden : null,
-            });
-            void resumeAudioContext();
-          }
-        });
-      }
-
-      state.gainNode = state.audioContext.createGain();
-      state.gainNode.gain.value = 1;
-      state.audioSourceNode = state.audioContext.createMediaElementSource(
-        dom.audioElement
-      );
-      state.audioSourceNode.connect(state.gainNode);
-      state.gainNode.connect(state.audioContext.destination);
-      tracePlayback('audioContext.init.success');
-    } catch (error) {
-      console.error('Failed to initialize Web Audio:', error);
-      tracePlayback('audioContext.init.failed', {
-        error: summarizeError(error),
-      });
-    }
+    tracePlayback('audioContext.init.skipped', {
+      hasAudioContext: Boolean(state.audioContext),
+      hasAudioElement: Boolean(dom.audioElement),
+      reason: 'ios-web-audio-workaround',
+    });
   }
 
   function queueObjectUrlForRevoke(objectUrl) {
@@ -680,6 +646,10 @@ export function createPlaybackController({
 
   function applyVolumeForCurrentTrack() {
     if (!state.gainNode) {
+      if (dom.gainInfoEl) {
+        dom.gainInfoEl.textContent = '';
+      }
+
       return;
     }
 
