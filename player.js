@@ -26,10 +26,9 @@ import { createPlaybackController } from './player/playback.js';
 import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
-const state = createPlayerState(dom.screens);
-const moduleVersion = new URL(import.meta.url).searchParams.get('v');
-window.__playerBuildId = 'playback-debug-2026-04-18-07';
-window.__playerModuleVersion = moduleVersion || 'base';
+const state = createPlayerState();
+window.__playerBuildId = '18';
+console.log('Player build:', window.__playerBuildId);
 const { playlists, currentPlaylistId } = loadPlaylists();
 
 state.playlists = playlists;
@@ -206,8 +205,6 @@ window.player = {
   pickMusicDirectory: library.pickMusicDirectory,
   play: playback.play,
   prev: playback.prev,
-  clearTrace: playback.clearDebugTrace,
-  dumpTrace: playback.dumpDebugTrace,
   toggleNormalize: playback.toggleNormalize,
   toggleShuffle: playback.toggleShuffle,
 };

@@ -140,7 +140,6 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
   }
 
   return {
-    applyTransforms,
     bindTouchNavigation,
     setScreen,
   };

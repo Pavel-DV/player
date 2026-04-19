@@ -1,7 +1,5 @@
 import { RESUME_DELAY_MS, buildDefaultArtwork } from './shared.js';
 
-const DEBUG_BUILD_ID = 'playback-debug-2026-04-18-07';
-
 function setMediaSessionPlaybackState(state) {
   if (!('mediaSession' in navigator)) {
     return;
@@ -26,11 +24,8 @@ export function createPlaybackController({
   saveSettings,
   savePlayerState,
 }) {
-  const debugTrace = [];
-  let debugSequence = 0;
   let lastTimeupdateTraceAt = 0;
   let hasBoundAudioContextStateEvents = false;
-  let lastMediaSessionPayload = null;
 
   function summarizeError(error) {
     if (!error) {
@@ -41,46 +36,6 @@ export function createPlaybackController({
       code: error.code ?? null,
       message: error.message ?? String(error),
       name: error.name ?? 'Error',
-    };
-  }
-
-  function getCurrentTrackKey() {
-    return state.files[state.index] ? getFileKey(state.files[state.index]) : null;
-  }
-
-  function getAudioSnapshot() {
-    if (!dom.audioElement) {
-      return null;
-    }
-
-    return {
-      currentTime: Number.isFinite(dom.audioElement.currentTime)
-        ? Number(dom.audioElement.currentTime.toFixed(3))
-        : null,
-      duration: Number.isFinite(dom.audioElement.duration)
-        ? Number(dom.audioElement.duration.toFixed(3))
-        : null,
-      ended: dom.audioElement.ended,
-      networkState: dom.audioElement.networkState,
-      paused: dom.audioElement.paused,
-      playbackRate: dom.audioElement.playbackRate,
-      readyState: dom.audioElement.readyState,
-      srcKind: dom.audioElement.src
-        ? dom.audioElement.src.startsWith('blob:')
-          ? 'blob'
-          : 'url'
-        : 'empty',
-    };
-  }
-
-  function getLocationSnapshot() {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    return {
-      href: window.location.href,
-      search: window.location.search,
     };
   }
 
@@ -95,63 +50,16 @@ export function createPlaybackController({
       lastTimeupdateTraceAt = now;
     }
 
-    const entry = {
-      audio: getAudioSnapshot(),
-      details,
-      event,
-      seq: ++debugSequence,
-      state: {
-        buildId: DEBUG_BUILD_ID,
-        currentPlaylistId: state.currentPlaylistId,
-        currentTrackKey: getCurrentTrackKey(),
-        index: state.index,
-        isInternalTransition: state.isInternalTransition,
-        isPlaying: state.isPlaying,
-        isSettingSrc: state.isSettingSrc,
-        offset: Number.isFinite(state.offset) ? Number(state.offset.toFixed(3)) : null,
-        pendingPlaySequence: state.pendingPlaySequence,
-        pendingStartOffset:
-          typeof state.pendingStartOffset === 'number'
-            ? Number(state.pendingStartOffset.toFixed(3))
-            : state.pendingStartOffset,
-        playSequence: state.playSequence,
-      },
-      ts: new Date(now).toISOString(),
-      url: getLocationSnapshot(),
-    };
-
-    debugTrace.push(entry);
-
-    if (debugTrace.length > 500) {
-      debugTrace.shift();
+    if (Object.keys(details).length > 0) {
+      console.log(`[player] ${event} ${JSON.stringify(details)}`);
+      return;
     }
 
-    if (typeof window !== 'undefined') {
-      window.__playerTrace = debugTrace;
-    }
-
-    console.log(`[player trace #${entry.seq}] ${event}`);
-  }
-
-  function dumpDebugTrace() {
-    return debugTrace.slice();
-  }
-
-  function clearDebugTrace() {
-    debugTrace.length = 0;
-    debugSequence = 0;
-    lastTimeupdateTraceAt = 0;
-    tracePlayback('debug.trace.cleared');
-  }
-
-  if (typeof window !== 'undefined') {
-    window.__playerTrace = debugTrace;
-    window.dumpPlayerTrace = () => dumpDebugTrace();
-    window.clearPlayerTrace = () => clearDebugTrace();
+    console.log(`[player] ${event}`);
   }
 
   tracePlayback('controller.created', {
-    buildId: DEBUG_BUILD_ID,
+    buildId: window.__playerBuildId ?? null,
     userAgent:
       typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
   });
@@ -304,12 +212,6 @@ export function createPlaybackController({
       artworkSource,
     });
 
-    lastMediaSessionPayload = {
-      payload: mediaMetadataPayload,
-      signature: mediaSessionSignature,
-      trackKey,
-    };
-
     if (state.mediaSessionSignature === mediaSessionSignature) {
       tracePlayback('mediaSession.metadata.unchanged', {
         source,
@@ -325,29 +227,6 @@ export function createPlaybackController({
       source,
       title: mediaMetadataPayload.title,
       trackKey,
-    });
-  }
-
-  function reapplyCurrentMediaMetadata(source = 'unknown') {
-    if (
-      !('mediaSession' in navigator) ||
-      typeof MediaMetadata === 'undefined' ||
-      !lastMediaSessionPayload
-    ) {
-      tracePlayback('mediaSession.metadata.reapply.skipped', {
-        hasMediaMetadata: typeof MediaMetadata !== 'undefined',
-        hasMediaSession: 'mediaSession' in navigator,
-        hasPayload: Boolean(lastMediaSessionPayload),
-        source,
-      });
-      return;
-    }
-
-    navigator.mediaSession.metadata = new MediaMetadata(lastMediaSessionPayload.payload);
-    state.mediaSessionSignature = lastMediaSessionPayload.signature;
-    tracePlayback('mediaSession.metadata.reapplied', {
-      source,
-      trackKey: lastMediaSessionPayload.trackKey,
     });
   }
 
@@ -1141,19 +1020,6 @@ export function createPlaybackController({
       void ui.highlight();
       ui.updatePlaylistsButtons();
       syncMediaSession('audio.playing');
-      setMediaSessionPlaybackState('playing');
-
-      window.setTimeout(() => {
-        if (!state.isPlaying) {
-          tracePlayback('audio.event.playing.deferred-sync.skipped', {
-            reason: 'not-playing',
-          });
-          return;
-        }
-
-        reapplyCurrentMediaMetadata('audio.playing.deferred');
-        syncMediaSession('audio.playing.deferred');
-      }, 250);
     });
 
     dom.audioElement.addEventListener('pause', () => {
@@ -1231,51 +1097,24 @@ export function createPlaybackController({
             ? 'document.visibilitychange.hidden'
             : 'document.visibilitychange.visible'
         );
-        reapplyCurrentMediaMetadata(
-          document.hidden
-            ? 'document.visibilitychange.hidden'
-            : 'document.visibilitychange.visible'
-        );
         syncMediaSession(
           document.hidden
             ? 'document.visibilitychange.hidden'
             : 'document.visibilitychange.visible'
         );
-
-        window.setTimeout(() => {
-          if (!state.isPlaying) {
-            tracePlayback('document.visibilitychange.deferred-sync.skipped', {
-              reason: 'not-playing',
-            });
-            return;
-          }
-
-          reapplyCurrentMediaMetadata(
-            document.hidden
-              ? 'document.visibilitychange.deferred.hidden'
-              : 'document.visibilitychange.deferred.visible'
-          );
-          syncMediaSession(
-            document.hidden
-              ? 'document.visibilitychange.deferred.hidden'
-              : 'document.visibilitychange.deferred.visible'
-          );
-        }, 250);
       }
 
-      if (state.audioContext && state.isPlaying && state.audioContext.state === 'suspended') {
-        tracePlayback('document.visibilitychange.resume-audio-context');
+      if (
+        state.audioContext &&
+        state.audioContext.state === 'suspended' &&
+        (state.isPlaying || !document.hidden)
+      ) {
+        tracePlayback(
+          document.hidden
+            ? 'document.visibilitychange.hidden.resume-audio-context'
+            : 'document.visibilitychange.visible.resume-audio-context'
+        );
         void resumeAudioContext();
-      }
-
-      if (state.audioContext && !document.hidden && state.audioContext.state === 'suspended') {
-        tracePlayback('document.visibilitychange.visible.resume-audio-context');
-        void state.audioContext.resume().catch(error => {
-          console.error('Failed to resume audio context after showing:', error);
-          tracePlayback('document.visibilitychange.visible.resume-audio-context.failed', {
-            error: summarizeError(error),
-          });
-        });
       }
     });
   }
@@ -1292,14 +1131,11 @@ export function createPlaybackController({
     play,
     prev,
     refreshAudioElementLayout,
-    restoreCurrentTrackSource,
     primeCurrentTrackSource,
     setNormalize,
     setShuffle,
     setupMediaSessionHandlers,
     startTrack,
-    clearDebugTrace,
-    dumpDebugTrace,
     syncMediaMetadata,
     toggleNormalize,
     toggleShuffle,

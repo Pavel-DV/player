@@ -1,5 +1,4 @@
-export const AUDIO_FILE_PATTERN = /\.(mp3|m4a|wav|ogg|flac)$/i;
-export const MEDIA_SESSION_SYNC_MS = 1000;
+const AUDIO_FILE_PATTERN = /\.(mp3|m4a|wav|ogg|flac)$/i;
 export const RESUME_DELAY_MS = 10;
 const fileKeyOverrides = new WeakMap();
 

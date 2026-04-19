@@ -645,7 +645,6 @@ export function createUiController({
 
   return {
     addAllFilesToCurrentPlaylist,
-    clearTrackDisplay,
     createPlaylist,
     highlight,
     renderList,

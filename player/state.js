@@ -1,4 +1,4 @@
-export function createPlayerState(screens) {
+export function createPlayerState() {
   return {
     currentScreen: 1,
     touchStartX: 0,
@@ -17,7 +17,6 @@ export function createPlayerState(screens) {
     playlists: [],
     currentPlaylistId: null,
     fileIndexByKey: new Map(),
-    lastMediaSessionSync: 0,
     isSettingSrc: false,
     isInternalTransition: false,
     audioContext: null,
@@ -26,6 +25,5 @@ export function createPlayerState(screens) {
     currentObjectUrl: null,
     objectUrlsPendingRevoke: [],
     mediaSessionSignature: null,
-    screens,
   };
 }
