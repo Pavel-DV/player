@@ -346,70 +346,248 @@ export function createPlaybackController({
     return peak;
   }
 
-  function encodeAudioBufferAsWav(audioBuffer) {
-    const channelCount = audioBuffer.numberOfChannels;
-    const sampleRate = audioBuffer.sampleRate;
-    const sampleCount = audioBuffer.length;
-    const bytesPerSample = 2;
-    const dataLength = sampleCount * channelCount * bytesPerSample;
-    const buffer = new ArrayBuffer(44 + dataLength);
-    const view = new DataView(buffer);
-    let offset = 0;
+  function getBits(bytes, byteOffset, bitOffset, bitLength) {
+    let value = 0;
 
-    const writeString = value => {
-      for (let index = 0; index < value.length; index += 1) {
-        view.setUint8(offset, value.charCodeAt(index));
-        offset += 1;
-      }
-    };
-
-    const writeUint16 = value => {
-      view.setUint16(offset, value, true);
-      offset += 2;
-    };
-
-    const writeUint32 = value => {
-      view.setUint32(offset, value, true);
-      offset += 4;
-    };
-
-    writeString('RIFF');
-    writeUint32(36 + dataLength);
-    writeString('WAVE');
-    writeString('fmt ');
-    writeUint32(16);
-    writeUint16(1);
-    writeUint16(channelCount);
-    writeUint32(sampleRate);
-    writeUint32(sampleRate * channelCount * bytesPerSample);
-    writeUint16(channelCount * bytesPerSample);
-    writeUint16(bytesPerSample * 8);
-    writeString('data');
-    writeUint32(dataLength);
-
-    const channelData = Array.from({ length: channelCount }, (_, index) =>
-      audioBuffer.getChannelData(index)
-    );
-
-    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
-      for (let channelIndex = 0; channelIndex < channelCount; channelIndex += 1) {
-        const sample = Math.max(-1, Math.min(1, channelData[channelIndex][sampleIndex]));
-        view.setInt16(
-          offset,
-          sample < 0 ? sample * 0x8000 : sample * 0x7fff,
-          true
-        );
-        offset += bytesPerSample;
-      }
+    for (let bitIndex = 0; bitIndex < bitLength; bitIndex += 1) {
+      const absoluteBitOffset = byteOffset * 8 + bitOffset + bitIndex;
+      const currentByte = bytes[absoluteBitOffset >> 3];
+      const currentBit = 7 - (absoluteBitOffset & 7);
+      value = (value << 1) | ((currentByte >> currentBit) & 1);
     }
 
-    return new Blob([buffer], { type: 'audio/wav' });
+    return value;
+  }
+
+  function setBits(bytes, byteOffset, bitOffset, bitLength, value) {
+    for (let bitIndex = 0; bitIndex < bitLength; bitIndex += 1) {
+      const absoluteBitOffset = byteOffset * 8 + bitOffset + bitIndex;
+      const byteIndex = absoluteBitOffset >> 3;
+      const currentBit = 7 - (absoluteBitOffset & 7);
+      const nextBit = (value >> (bitLength - bitIndex - 1)) & 1;
+
+      if (nextBit) {
+        bytes[byteIndex] |= 1 << currentBit;
+      } else {
+        bytes[byteIndex] &= ~(1 << currentBit);
+      }
+    }
+  }
+
+  function getId3TagSize(bytes) {
+    if (
+      bytes.length < 10 ||
+      bytes[0] !== 0x49 ||
+      bytes[1] !== 0x44 ||
+      bytes[2] !== 0x33
+    ) {
+      return 0;
+    }
+
+    const tagSize =
+      ((bytes[6] & 0x7f) << 21) |
+      ((bytes[7] & 0x7f) << 14) |
+      ((bytes[8] & 0x7f) << 7) |
+      (bytes[9] & 0x7f);
+    const hasFooter = (bytes[5] & 0x10) !== 0;
+
+    return 10 + tagSize + (hasFooter ? 10 : 0);
+  }
+
+  function parseMp3FrameHeader(bytes, frameOffset) {
+    if (frameOffset + 4 > bytes.length) {
+      return null;
+    }
+
+    const byte1 = bytes[frameOffset];
+    const byte2 = bytes[frameOffset + 1];
+    const byte3 = bytes[frameOffset + 2];
+    const byte4 = bytes[frameOffset + 3];
+
+    if (byte1 !== 0xff || (byte2 & 0xe0) !== 0xe0) {
+      return null;
+    }
+
+    const versionBits = (byte2 >> 3) & 0x03;
+    const layerBits = (byte2 >> 1) & 0x03;
+    const bitrateIndex = (byte3 >> 4) & 0x0f;
+    const sampleRateIndex = (byte3 >> 2) & 0x03;
+    const padding = (byte3 >> 1) & 0x01;
+    const channelMode = (byte4 >> 6) & 0x03;
+
+    if (versionBits === 0x01 || layerBits !== 0x01 || bitrateIndex === 0 || bitrateIndex === 0x0f) {
+      return null;
+    }
+
+    if (sampleRateIndex === 0x03) {
+      return null;
+    }
+
+    const version =
+      versionBits === 0x03 ? 1 : versionBits === 0x02 ? 2 : 2.5;
+    const sampleRates =
+      version === 1
+        ? [44100, 48000, 32000]
+        : version === 2
+          ? [22050, 24000, 16000]
+          : [11025, 12000, 8000];
+    const bitrates =
+      version === 1
+        ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0]
+        : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0];
+    const sampleRate = sampleRates[sampleRateIndex];
+    const bitrateKbps = bitrates[bitrateIndex];
+
+    if (!sampleRate || !bitrateKbps) {
+      return null;
+    }
+
+    const channels = channelMode === 0x03 ? 1 : 2;
+    const frameLength = Math.floor(
+      ((version === 1 ? 144000 : 72000) * bitrateKbps) / sampleRate + padding
+    );
+    const hasCrc = (byte2 & 0x01) === 0;
+    const sideInfoSize =
+      version === 1 ? (channels === 1 ? 17 : 32) : channels === 1 ? 9 : 17;
+    const channelInfoBitLength = version === 1 ? 59 : 63;
+    const channelInfoStartBitOffset =
+      version === 1
+        ? 9 + (channels === 1 ? 5 : 3) + channels * 4
+        : 8 + (channels === 1 ? 1 : 2);
+    const sideInfoByteOffset = frameOffset + 4 + (hasCrc ? 2 : 0);
+
+    if (
+      frameLength <= 0 ||
+      frameOffset + frameLength > bytes.length ||
+      sideInfoByteOffset + sideInfoSize > frameOffset + frameLength
+    ) {
+      return null;
+    }
+
+    return {
+      channelInfoBitLength,
+      channelInfoStartBitOffset,
+      channels,
+      frameLength,
+      granules: version === 1 ? 2 : 1,
+      sideInfoByteOffset,
+      sideInfoSize,
+    };
+  }
+
+  async function rewriteMp3GlobalGain(file, multiplier) {
+    const trackKey = getFileKey(file);
+    const gainStepDelta = Math.round(Math.log2(multiplier) * 4);
+
+    if (!Number.isFinite(gainStepDelta) || gainStepDelta === 0) {
+      return {
+        changedFrameCount: 0,
+        source: file,
+      };
+    }
+
+    const sourceBytes = new Uint8Array(await file.arrayBuffer());
+    const outputBytes = new Uint8Array(sourceBytes);
+    const frameSearchStartOffset = getId3TagSize(outputBytes);
+    let frameOffset = frameSearchStartOffset;
+    let changedFrameCount = 0;
+    let parsedFrameCount = 0;
+
+    while (frameOffset + 4 <= outputBytes.length) {
+      if (
+        outputBytes.length - frameOffset === 128 &&
+        outputBytes[frameOffset] === 0x54 &&
+        outputBytes[frameOffset + 1] === 0x41 &&
+        outputBytes[frameOffset + 2] === 0x47
+      ) {
+        break;
+      }
+
+      const frameHeader = parseMp3FrameHeader(outputBytes, frameOffset);
+
+      if (!frameHeader) {
+        if (parsedFrameCount === 0) {
+          console.warn(`Failed to parse the first MP3 frame for "${trackKey}"`);
+          return {
+            changedFrameCount: 0,
+            source: file,
+          };
+        }
+
+        if (outputBytes.length - frameOffset > 16) {
+          console.warn(`Stopped MP3 gain rewrite early for "${trackKey}" at ${frameOffset}`);
+        } else {
+          tracePlayback('audio.source.mp3.global-gain.trailing-bytes', {
+            remainingBytes: outputBytes.length - frameOffset,
+            trackKey,
+          });
+        }
+
+        break;
+      }
+
+      parsedFrameCount += 1;
+
+      for (let granuleIndex = 0; granuleIndex < frameHeader.granules; granuleIndex += 1) {
+        for (let channelIndex = 0; channelIndex < frameHeader.channels; channelIndex += 1) {
+          const channelBitOffset =
+            frameHeader.channelInfoStartBitOffset +
+            (granuleIndex * frameHeader.channels + channelIndex) *
+              frameHeader.channelInfoBitLength;
+          const globalGainBitOffset = channelBitOffset + 21;
+          const currentGlobalGain = getBits(
+            outputBytes,
+            frameHeader.sideInfoByteOffset,
+            globalGainBitOffset,
+            8
+          );
+          const nextGlobalGain = Math.max(
+            0,
+            Math.min(255, currentGlobalGain + gainStepDelta)
+          );
+
+          if (nextGlobalGain !== currentGlobalGain) {
+            setBits(
+              outputBytes,
+              frameHeader.sideInfoByteOffset,
+              globalGainBitOffset,
+              8,
+              nextGlobalGain
+            );
+            changedFrameCount += 1;
+          }
+        }
+      }
+
+      frameOffset += frameHeader.frameLength;
+    }
+
+    if (parsedFrameCount === 0 || changedFrameCount === 0) {
+      return {
+        changedFrameCount,
+        source: file,
+      };
+    }
+
+    tracePlayback('audio.source.mp3.global-gain.rewritten', {
+      changedFrameCount,
+      gainStepDelta,
+      trackKey,
+    });
+
+    return {
+      changedFrameCount,
+      source: setFileKey(
+        new Blob([outputBytes], { type: file.type || 'audio/mpeg' }),
+        trackKey
+      ),
+    };
   }
 
   async function buildPreparedSource(file) {
     const trackKey = getFileKey(file);
 
-    if (!state.normalize) {
+    if (!state.normalize || !/\.mp3$/i.test(trackKey)) {
       return {
         isNormalized: false,
         source: file,
@@ -423,10 +601,7 @@ export function createPlaybackController({
       };
     }
 
-    const DecodeAudioContext =
-      window.AudioContext || window.webkitAudioContext;
-    const RenderAudioContext =
-      window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const DecodeAudioContext = window.AudioContext || window.webkitAudioContext;
     const decodeAudioContext = new DecodeAudioContext();
     let audioBuffer = null;
 
@@ -465,32 +640,21 @@ export function createPlaybackController({
       };
     }
 
-    const offlineAudioContext = new RenderAudioContext(
-      audioBuffer.numberOfChannels,
-      audioBuffer.length,
-      audioBuffer.sampleRate
-    );
-    const sourceNode = offlineAudioContext.createBufferSource();
-    const gainNode = offlineAudioContext.createGain();
+    const { changedFrameCount, source } = await rewriteMp3GlobalGain(file, multiplier);
 
-    sourceNode.buffer = audioBuffer;
-    gainNode.gain.value = multiplier;
-    sourceNode.connect(gainNode);
-    gainNode.connect(offlineAudioContext.destination);
-    sourceNode.start(0);
+    if (changedFrameCount === 0) {
+      return {
+        isNormalized: false,
+        source: file,
+      };
+    }
 
-    const renderedAudioBuffer = await offlineAudioContext.startRendering();
-    const normalizedBlob = setFileKey(
-      encodeAudioBufferAsWav(renderedAudioBuffer),
-      trackKey
-    );
-
-    cachedNormalizedBlob = normalizedBlob;
+    cachedNormalizedBlob = source;
     cachedNormalizedTrackKey = trackKey;
 
     return {
       isNormalized: true,
-      source: normalizedBlob,
+      source,
     };
   }
 
