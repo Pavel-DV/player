@@ -601,28 +601,28 @@ export function createPlaybackController({
       };
     }
 
-    const DecodeAudioContext = window.AudioContext || window.webkitAudioContext;
-    const decodeAudioContext = new DecodeAudioContext();
-    let audioBuffer = null;
-
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      audioBuffer = await new Promise((resolve, reject) =>
-        decodeAudioContext.decodeAudioData(arrayBuffer, resolve, reject)
-      );
-    } finally {
-      try {
-        await decodeAudioContext.close();
-      } catch (error) {
-        tracePlayback('audioContext.decode.close.failed', {
-          error: summarizeError(error),
-        });
-      }
-    }
-
     let peak = loadNormInfo(trackKey);
 
     if (!(typeof peak === 'number' && peak > 0)) {
+      const DecodeAudioContext = window.AudioContext || window.webkitAudioContext;
+      const decodeAudioContext = new DecodeAudioContext();
+      let audioBuffer = null;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        audioBuffer = await new Promise((resolve, reject) =>
+          decodeAudioContext.decodeAudioData(arrayBuffer, resolve, reject)
+        );
+      } finally {
+        try {
+          await decodeAudioContext.close();
+        } catch (error) {
+          tracePlayback('audioContext.decode.close.failed', {
+            error: summarizeError(error),
+          });
+        }
+      }
+
       peak = analyzePeak(audioBuffer);
 
       if (typeof peak === 'number' && peak > 0) {
