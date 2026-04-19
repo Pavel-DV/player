@@ -818,9 +818,9 @@ export function createPlaybackController({
       return;
     }
 
+    dom.audioElement.pause();
     state.offset = dom.audioElement.currentTime || 0;
     state.pendingStartOffset = null;
-    restoreCurrentTrackSource();
     state.isPlaying = false;
     tracePlayback('playback.pause', {
       offset: Number(state.offset.toFixed(3)),
