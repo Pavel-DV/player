@@ -4,6 +4,8 @@ import {
   setFileKey,
 } from './shared.js';
 
+const PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS = 3;
+
 function setMediaSessionPlaybackState(state) {
   if (!('mediaSession' in navigator)) {
     return;
@@ -1251,6 +1253,38 @@ export function createPlaybackController({
       tracePlayback('playback.prev.skipped', {
         reason: 'empty-queue',
       });
+      return;
+    }
+
+    const currentOffset = dom.audioElement
+      ? dom.audioElement.currentTime || state.offset || 0
+      : state.offset || 0;
+
+    if (currentOffset > PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS) {
+      state.offset = 0;
+      state.pendingStartOffset = null;
+
+      if (
+        dom.audioElement &&
+        dom.audioElement.src &&
+        dom.audioElement.src !== window.location.href
+      ) {
+        try {
+          dom.audioElement.currentTime = 0;
+        } catch (error) {
+          tracePlayback('playback.prev.restart-current.failed', {
+            error: summarizeError(error),
+          });
+        }
+      }
+
+      tracePlayback('playback.prev.restart-current', {
+        currentOffset: Number(currentOffset.toFixed(3)),
+        threshold: PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS,
+      });
+      savePlayerState();
+      syncMediaSession('playback.prev.restart-current');
+      void ui.highlight();
       return;
     }
 
