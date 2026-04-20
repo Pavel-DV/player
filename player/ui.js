@@ -1,4 +1,4 @@
-import { createPlaylistId } from './shared.js';
+import { buildDefaultArtwork, createPlaylistId } from './shared.js';
 
 const EMPTY_METADATA = {
   title: null,
@@ -166,8 +166,8 @@ export function createUiController({
     }
 
     if (dom.trackArtworkEl) {
-      if (freshCurrentFile && metadata.artwork) {
-        dom.trackArtworkEl.src = metadata.artwork;
+      if (freshCurrentFile) {
+        dom.trackArtworkEl.src = metadata.artwork || buildDefaultArtwork();
         dom.trackArtworkEl.style.display = 'block';
       } else {
         dom.trackArtworkEl.style.display = 'none';
