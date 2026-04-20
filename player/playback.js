@@ -7,6 +7,14 @@ import {
 const PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS = 3;
 const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
 
+function getMaxTrackStartOffset(duration) {
+  if (!(Number.isFinite(duration) && duration > 0)) {
+    return 0;
+  }
+
+  return Math.max(0, duration - START_OFFSET_END_TOLERANCE_SECONDS);
+}
+
 function setMediaSessionPlaybackState(state) {
   if (!('mediaSession' in navigator)) {
     return;
@@ -28,6 +36,7 @@ export function createPlaybackController({
   getDisplayName,
   getQueueIndices,
   loadNormInfo,
+  loadTrackStartTime,
   saveNormInfo,
   saveSettings,
   savePlayerState,
@@ -261,10 +270,30 @@ export function createPlaybackController({
     }
 
     if (Number.isFinite(duration) && duration > 0) {
-      return offset >= duration - START_OFFSET_END_TOLERANCE_SECONDS ? 0 : offset;
+      return Math.min(offset, getMaxTrackStartOffset(duration));
     }
 
     return offset;
+  }
+
+  function getTrackStartOffset(file) {
+    if (!file) {
+      return 0;
+    }
+
+    const trackStartOffset = loadTrackStartTime(getFileKey(file));
+    return Number.isFinite(trackStartOffset) && trackStartOffset > 0
+      ? trackStartOffset
+      : 0;
+  }
+
+  function getStartOffsetForPlayback(file, requestedOffset, duration = NaN) {
+    const nextOffset =
+      Number.isFinite(requestedOffset) && requestedOffset > 0
+        ? requestedOffset
+        : getTrackStartOffset(file);
+
+    return normalizeStartOffset(nextOffset, duration);
   }
 
   function syncPendingStartOffset(reason = 'unknown') {
@@ -921,7 +950,7 @@ export function createPlaybackController({
     return buildPreparedSource(file)
       .then(({ isNormalized, source }) => {
         setAudioSource(source, { isNormalizedSource: isNormalized });
-        state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
+        state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
         tracePlayback('audio.source.reload.success', {
           isNormalizedSource: isNormalized,
           pendingStartOffset: state.pendingStartOffset,
@@ -999,7 +1028,7 @@ export function createPlaybackController({
           isNormalizedSource: isNormalized,
           markInternalTransition: false,
         });
-        state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
+        state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
         dom.audioElement.load();
         state.isInternalTransition = false;
         tracePlayback('audio.source.prime.success', {
@@ -1163,7 +1192,8 @@ export function createPlaybackController({
       });
       bindEndedHandler(state.playSequence, 'playback.play.resume-existing-source');
       try {
-        dom.audioElement.currentTime = normalizeStartOffset(
+        dom.audioElement.currentTime = getStartOffsetForPlayback(
+          file,
           state.offset,
           dom.audioElement.duration
         );
@@ -1192,7 +1222,7 @@ export function createPlaybackController({
         }
 
         setAudioSource(source, { isNormalizedSource: isNormalized });
-        state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
+        state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
         tracePlayback('playback.play.new-source', {
           isNormalizedSource: isNormalized,
           pendingStartOffset: state.pendingStartOffset,
@@ -1262,6 +1292,65 @@ export function createPlaybackController({
     state.index = trackIndex;
     state.offset = 0;
     kill();
+    play();
+  }
+
+  function previewStartOffset(offset) {
+    const file = state.files[state.index];
+
+    if (!file || !dom.audioElement) {
+      tracePlayback('playback.preview-start-offset.skipped', {
+        hasAudioElement: Boolean(dom.audioElement),
+        hasFile: Boolean(file),
+      });
+      return;
+    }
+
+    const nextOffset = getStartOffsetForPlayback(
+      file,
+      offset,
+      dom.audioElement.duration
+    );
+
+    state.offset = nextOffset;
+    state.pendingStartOffset = nextOffset;
+    tracePlayback('playback.preview-start-offset', {
+      offset: Number(nextOffset.toFixed(3)),
+      trackKey: getFileKey(file),
+    });
+
+    const hasPlayableCurrentSource =
+      Boolean(dom.audioElement.src) && dom.audioElement.src !== window.location.href;
+    const hasMatchingActiveSource =
+      hasPlayableCurrentSource && currentSourceTrackKey === getFileKey(file);
+
+    if (hasMatchingActiveSource) {
+      try {
+        dom.audioElement.currentTime = nextOffset;
+        state.pendingStartOffset = null;
+      } catch (error) {
+        tracePlayback('playback.preview-start-offset.seek-failed', {
+          error: summarizeError(error),
+          offset: Number(nextOffset.toFixed(3)),
+          trackKey: getFileKey(file),
+        });
+      }
+
+      syncMediaSession('playback.preview-start-offset');
+
+      if (dom.audioElement.paused) {
+        ensurePlaybackAudioSession('playback.preview-start-offset');
+        setupMediaSessionHandlers();
+        bindEndedHandler(
+          state.playSequence,
+          'playback.preview-start-offset.resume-existing-source'
+        );
+        void playForSequence(state.playSequence, 'Failed to preview playback:');
+      }
+
+      return;
+    }
+
     play();
   }
 
@@ -1614,6 +1703,7 @@ export function createPlaybackController({
     pauseSoft,
     play,
     prev,
+    previewStartOffset,
     refreshAudioElementLayout,
     primeCurrentTrackSource,
     setNormalize,

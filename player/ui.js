@@ -47,6 +47,11 @@ export function createUiController({
     if (clearGain && dom.gainInfoEl) {
       dom.gainInfoEl.textContent = '';
     }
+
+    if (dom.trackStartInfoEl) {
+      dom.trackStartInfoEl.textContent = '';
+      dom.trackStartInfoEl.style.display = 'none';
+    }
   }
 
   function ensureDefaultPlaylist() {

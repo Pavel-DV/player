@@ -7,6 +7,7 @@ export function getPlayerDom() {
     trackArtistEl: document.getElementById('trackArtist'),
     trackArtworkEl: document.getElementById('trackArtwork'),
     gainInfoEl: document.getElementById('gainInfo'),
+    trackStartInfoEl: document.getElementById('trackStartInfo'),
     addAllBtn: document.getElementById('addAllBtn'),
     playlistsEl: document.getElementById('playlists'),
     playlistViewEl: document.getElementById('playlistView'),

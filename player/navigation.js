@@ -50,7 +50,7 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
     state.touchStartY = touch.clientY;
     state.touchActive = true;
 
-    if (event.target.closest('#audioElement')) {
+    if (event.target.closest('#audioElement, #trackArtwork')) {
       state.touchActive = false;
       return;
     }

@@ -9,11 +9,13 @@ import {
   loadPlaylistState,
   loadPlaylists,
   loadSettings,
+  loadTrackStartTime,
   removePlaylistState,
   saveNormInfo,
   savePlaylistState,
   savePlaylists,
   saveSettings,
+  saveTrackStartTime,
 } from './player/storage.js';
 import { createPlayerState } from './player/state.js';
 import {
@@ -24,11 +26,12 @@ import {
   isAudioFile,
 } from './player/shared.js';
 import { createPlaybackController } from './player/playback.js';
+import { createTrackRotationController } from './player/track-rotation.js';
 import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '48';
+window.__playerBuildId = '56';
 console.log('Player build:', window.__playerBuildId);
 const { playlists, currentPlaylistId } = loadPlaylists();
 
@@ -38,6 +41,7 @@ state.currentPlaylistId = currentPlaylistId || state.playlists[0]?.id || null;
 const metadataReader = createMetadataReader({ getFileKey });
 
 let playback;
+let trackRotation;
 
 const navigation = createScreenNavigator({
   state,
@@ -80,6 +84,29 @@ const library = createLibraryController({
   },
 });
 
+function lookupFileByKey(trackKey) {
+  const fileIndex = state.fileIndexByKey.get(trackKey);
+  return typeof fileIndex === 'number' ? state.files[fileIndex] : null;
+}
+
+const normalization = createNormalizationService({
+  lookupFileByKey,
+  loadNormInfo,
+  loadTrackStartTime,
+  saveNormInfo,
+  saveTrackStartTime,
+  onTrackAnalyzed: trackKey => {
+    const currentTrackKey = state.files[state.index]
+      ? getFileKey(state.files[state.index])
+      : null;
+
+    if (trackKey === currentTrackKey) {
+      playback?.applyVolumeForCurrentTrack();
+      trackRotation?.sync(true);
+    }
+  },
+});
+
 const ui = createUiController({
   state,
   dom,
@@ -103,6 +130,8 @@ const ui = createUiController({
     if (shouldSyncMediaMetadata) {
       playback?.syncMediaMetadata(file, metadata, playlistName, 'ui.highlight');
     }
+
+    trackRotation.sync();
   },
   actions: {
     kill: () => playback?.kill(),
@@ -111,26 +140,6 @@ const ui = createUiController({
     play: () => playback?.play(),
     primeCurrentTrackSource: () => playback?.primeCurrentTrackSource(),
     startTrack: trackIndex => playback?.startTrack(trackIndex),
-  },
-});
-
-function lookupFileByKey(trackKey) {
-  const fileIndex = state.fileIndexByKey.get(trackKey);
-  return typeof fileIndex === 'number' ? state.files[fileIndex] : null;
-}
-
-const normalization = createNormalizationService({
-  lookupFileByKey,
-  loadNormInfo,
-  saveNormInfo,
-  onTrackAnalyzed: trackKey => {
-    const currentTrackKey = state.files[state.index]
-      ? getFileKey(state.files[state.index])
-      : null;
-
-    if (trackKey === currentTrackKey) {
-      playback?.applyVolumeForCurrentTrack();
-    }
   },
 });
 
@@ -143,11 +152,23 @@ playback = createPlaybackController({
   getDisplayName,
   getQueueIndices,
   loadNormInfo,
+  loadTrackStartTime,
   saveNormInfo,
   saveSettings,
   savePlayerState: saveCurrentPlayerState,
 });
+
+trackRotation = createTrackRotationController({
+  dom,
+  state,
+  getFileKey,
+  loadTrackStartTime,
+  saveTrackStartTime,
+  previewStartOffset: offset => playback?.previewStartOffset(offset),
+});
+
 library.bindFileInput();
+trackRotation.bind();
 
 if (dom.trackTitleEl) {
   dom.trackTitleEl.onclick = () => {
@@ -178,6 +199,7 @@ if (dom.clearCacheBtn) {
         dom.gainInfoEl.textContent = '';
       }
 
+      trackRotation.sync(true);
       window.alert('Cache cleared');
       return;
     }
@@ -198,6 +220,14 @@ void ui.highlight();
 playback.bindAudioEvents();
 playback.bindVisibilityEvents();
 navigation.bindTouchNavigation();
+
+dom.audioElement?.addEventListener('loadedmetadata', () => {
+  trackRotation.sync(true);
+});
+
+dom.audioElement?.addEventListener('durationchange', () => {
+  trackRotation.sync(true);
+});
 
 window.player = {
   addAllFilesToCurrentPlaylist: ui.addAllFilesToCurrentPlaylist,

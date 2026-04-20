@@ -3,6 +3,7 @@ const SETTINGS_KEY = 'settings';
 const PLAYLIST_STATES_KEY = 'playlistStates';
 const LEGACY_PLAYER_STATES_KEY = 'playerStates';
 const NORM_INFO_KEY = 'normInfo';
+const TRACK_START_INFO_KEY = 'trackStartInfo';
 
 function readJson(key, fallback, errorLabel) {
   try {
@@ -151,9 +152,46 @@ export function saveNormInfo(trackKey, peak) {
   );
 }
 
+export function loadTrackStartTime(trackKey) {
+  const allTrackStartInfo = readJson(
+    TRACK_START_INFO_KEY,
+    {},
+    'load track start info'
+  );
+  const value = allTrackStartInfo?.[trackKey];
+
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+export function saveTrackStartTime(trackKey, offset) {
+  if (!trackKey) {
+    return false;
+  }
+
+  const allTrackStartInfo = readJson(
+    TRACK_START_INFO_KEY,
+    {},
+    'load track start info for save'
+  );
+  const nextOffset = Number.isFinite(offset) ? Math.max(0, offset) : 0;
+
+  if (nextOffset > 0) {
+    allTrackStartInfo[trackKey] = nextOffset;
+  } else {
+    delete allTrackStartInfo[trackKey];
+  }
+
+  return writeJson(
+    TRACK_START_INFO_KEY,
+    allTrackStartInfo,
+    'save track start info'
+  );
+}
+
 export function clearPlayerCache() {
   try {
     localStorage.removeItem(NORM_INFO_KEY);
+    localStorage.removeItem(TRACK_START_INFO_KEY);
     localStorage.removeItem(PLAYLIST_STATES_KEY);
     localStorage.removeItem(LEGACY_PLAYER_STATES_KEY);
     return true;
