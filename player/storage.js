@@ -4,6 +4,7 @@ const PLAYLIST_STATES_KEY = 'playlistStates';
 const LEGACY_PLAYER_STATES_KEY = 'playerStates';
 const NORM_INFO_KEY = 'normInfo';
 const TRACK_START_INFO_KEY = 'trackStartInfo';
+const EXPLICIT_INFO_KEY = 'explicitInfo';
 
 function readJson(key, fallback, errorLabel) {
   try {
@@ -48,6 +49,7 @@ export function loadSettings() {
   return {
     shuffle: Boolean(data?.shuffle),
     normalize: Boolean(data?.normalize),
+    allowExplicit: data?.allowExplicit !== false,
   };
 }
 
@@ -186,6 +188,31 @@ export function saveTrackStartTime(trackKey, offset) {
     allTrackStartInfo,
     'save track start info'
   );
+}
+
+export function loadExplicitInfo(trackKey) {
+  const allExplicitInfo = readJson(EXPLICIT_INFO_KEY, {}, 'load explicit info');
+  return Boolean(trackKey && allExplicitInfo?.[trackKey]);
+}
+
+export function saveExplicitInfo(trackKey, isExplicit) {
+  if (!trackKey) {
+    return false;
+  }
+
+  const allExplicitInfo = readJson(
+    EXPLICIT_INFO_KEY,
+    {},
+    'load explicit info for save'
+  );
+
+  if (isExplicit) {
+    allExplicitInfo[trackKey] = true;
+  } else {
+    delete allExplicitInfo[trackKey];
+  }
+
+  return writeJson(EXPLICIT_INFO_KEY, allExplicitInfo, 'save explicit info');
 }
 
 export function clearPlayerCache() {

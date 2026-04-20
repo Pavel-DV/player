@@ -28,6 +28,10 @@ body{margin:0;position:fixed;width:100%;height:100%}
 /* normalize button state */
 #normalizeBtn{transition:background-color .15s ease,color .15s ease;font-size:30px}
 #normalizeBtn.on{background:#0a84ff;color:#fff}
+#explicitBtn{transition:background-color .15s ease,color .15s ease}
+#explicitBtn.on{background:#0a84ff;color:#fff}
+#explicitTrackToggle{width:24px;height:24px;border-radius:12px;font-size:12px;background:#2f2f2f;color:#999;transition:background-color .15s ease,color .15s ease}
+#explicitTrackToggle.on{background:#0a84ff;color:#fff}
 /* scrollable lists */
 #filelistwrapper,#playlistwrapper {flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
 button{padding:0;font-size:20px;width:52px;height:52px;background:#333;color:#e0e0e0;border:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;line-height:1}
@@ -73,7 +77,10 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
         <img id=trackArtwork style="width:140px;height:140px;border-radius:8px;margin-bottom:12px;display:none;transform-origin:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none" draggable="false">
         <h1 id=trackTitle style="margin:0;font-size:22px">—</h1>
         <span id=trackArtist style="color:#999;font-size:16px;margin-top:6px"></span>
-        <span id=gainInfo style="color:#666;font-size:13px;margin-top:4px"></span>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <span id=gainInfo style="color:#666;font-size:13px"></span>
+            <button id=explicitTrackToggle type=button aria-label="Toggle explicit for current track" aria-pressed="false">E</button>
+        </div>
         <span id=trackStartInfo style="color:#666;font-size:13px;margin-top:4px;display:none"></span>
     </div>
     <audio id=audioElement controls preload="none" x-webkit-airplay="allow" webkit-playsinline playsinline style="width:65%;margin:0 auto 20px;display:block;transform:scale(1.53);transform-origin:center"></audio>
@@ -98,6 +105,7 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 <div style="display:flex;align-items:center;gap:12px;margin:14px 8px 8px 8px">
 <h2 style="margin:0;font-size:24px;font-weight:600">Playlists</h2>
 <button id=addPlaylist style="width:32px;height:32px;font-size:20px">＋</button>
+<button id=explicitBtn style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px">Explicit</button>
 </div>
 <ol id=playlists style="list-style:none;padding:0;margin:0 8px"></ol>
 <div style="margin:20px 8px">

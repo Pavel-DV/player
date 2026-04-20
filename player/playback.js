@@ -1,6 +1,7 @@
 import {
   RESUME_DELAY_MS,
   buildDefaultArtwork,
+  getPlaylistItemOrder,
   setFileKey,
 } from './shared.js';
 
@@ -48,6 +49,10 @@ export function createPlaybackController({
   let cachedNormalizedTrackKey = null;
   let hasLoggedPlaybackAudioSessionReady = false;
   let lastEndedHandlerSequenceId = null;
+
+  function isTrackAllowed(trackKey) {
+    return state.allowExplicit || !state.explicitTrackKeys.has(trackKey);
+  }
 
   function summarizeError(error) {
     if (!error) {
@@ -997,6 +1002,14 @@ export function createPlaybackController({
       return Promise.resolve(false);
     }
 
+    if (!isTrackAllowed(getFileKey(file))) {
+      tracePlayback('audio.source.prime.skipped', {
+        reason: 'explicit-disabled',
+        trackKey: getFileKey(file),
+      });
+      return Promise.resolve(false);
+    }
+
     if (state.isPlaying) {
       tracePlayback('audio.source.prime.skipped', {
         reason: 'already-playing',
@@ -1161,6 +1174,20 @@ export function createPlaybackController({
       return;
     }
 
+    if (!isTrackAllowed(getFileKey(file))) {
+      tracePlayback('playback.play.failed', {
+        reason: 'explicit-disabled',
+        trackKey: getFileKey(file),
+      });
+      state.isPlaying = false;
+      state.offset = 0;
+      state.pendingStartOffset = null;
+      void ui.highlight();
+      ui.updatePlaylistsButtons();
+      savePlayerState();
+      return;
+    }
+
     tracePlayback('playback.play.begin', {
       trackKey: getFileKey(file),
     });
@@ -1289,9 +1316,18 @@ export function createPlaybackController({
     tracePlayback('playback.startTrack', {
       trackIndex,
     });
+    const file = state.files[trackIndex];
     state.index = trackIndex;
     state.offset = 0;
     kill();
+
+    if (!file || !isTrackAllowed(getFileKey(file))) {
+      void ui.highlight();
+      ui.updatePlaylistsButtons();
+      savePlayerState();
+      return;
+    }
+
     play();
   }
 
@@ -1354,6 +1390,67 @@ export function createPlaybackController({
     play();
   }
 
+  function findAdjacentPlayableTrackIndex(direction) {
+    const queue = getQueueIndices(state);
+
+    if (queue.length === 0) {
+      return null;
+    }
+
+    const currentPosition = queue.indexOf(state.index);
+
+    if (currentPosition >= 0) {
+      const step = direction === 'prev' ? -1 : 1;
+      return queue[(currentPosition + step + queue.length) % queue.length];
+    }
+
+    const currentTrackKey = state.files[state.index]
+      ? getFileKey(state.files[state.index])
+      : null;
+    const playlist = state.playlists.find(item => item.id === state.currentPlaylistId);
+
+    if (playlist && Array.isArray(playlist.items) && playlist.items.length > 0) {
+      const orderedKeys = getPlaylistItemOrder(state, playlist.id);
+      const currentKeyPosition = currentTrackKey
+        ? orderedKeys.indexOf(currentTrackKey)
+        : -1;
+
+      if (currentKeyPosition >= 0) {
+        const step = direction === 'prev' ? -1 : 1;
+
+        for (let offset = 1; offset <= orderedKeys.length; offset += 1) {
+          const candidatePosition =
+            (currentKeyPosition + step * offset + orderedKeys.length) %
+            orderedKeys.length;
+          const candidateKey = orderedKeys[candidatePosition];
+          const candidateIndex = state.fileIndexByKey.get(candidateKey);
+
+          if (
+            typeof candidateIndex === 'number' &&
+            isTrackAllowed(candidateKey)
+          ) {
+            return candidateIndex;
+          }
+        }
+      }
+    }
+
+    const step = direction === 'prev' ? -1 : 1;
+
+    for (let offset = 1; offset <= state.files.length; offset += 1) {
+      const candidateIndex =
+        (state.index + step * offset + state.files.length) % state.files.length;
+      const candidateFile = state.files[candidateIndex];
+      const candidateKey = candidateFile ? getFileKey(candidateFile) : null;
+
+      if (candidateKey && isTrackAllowed(candidateKey)) {
+        return candidateIndex;
+      }
+    }
+
+    return direction === 'prev' ? queue[queue.length - 1] : queue[0];
+  }
+
   function next() {
     const queue = getQueueIndices(state);
     tracePlayback('playback.next.begin', {
@@ -1368,11 +1465,17 @@ export function createPlaybackController({
       return;
     }
 
-    kill();
-    const currentPosition = queue.indexOf(state.index);
-    const nextPosition = currentPosition >= 0 ? (currentPosition + 1) % queue.length : 0;
-    state.index = queue[nextPosition];
+    const nextIndex = findAdjacentPlayableTrackIndex('next');
 
+    if (typeof nextIndex !== 'number') {
+      tracePlayback('playback.next.skipped', {
+        reason: 'missing-next-index',
+      });
+      return;
+    }
+
+    kill();
+    state.index = nextIndex;
     state.offset = 0;
     tracePlayback('playback.next.selected', {
       nextIndex: state.index,
@@ -1395,11 +1498,19 @@ export function createPlaybackController({
       return;
     }
 
+    const currentTrackKey = state.files[state.index]
+      ? getFileKey(state.files[state.index])
+      : null;
+    const canRestartCurrentTrack =
+      currentTrackKey && isTrackAllowed(currentTrackKey);
     const currentOffset = dom.audioElement
       ? dom.audioElement.currentTime || state.offset || 0
       : state.offset || 0;
 
-    if (currentOffset > PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS) {
+    if (
+      canRestartCurrentTrack &&
+      currentOffset > PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS
+    ) {
       state.offset = 0;
       state.pendingStartOffset = null;
 
@@ -1427,14 +1538,17 @@ export function createPlaybackController({
       return;
     }
 
-    kill();
-    const currentPosition = queue.indexOf(state.index);
-    const previousPosition =
-      currentPosition >= 0
-        ? (currentPosition - 1 + queue.length) % queue.length
-        : 0;
+    const previousIndex = findAdjacentPlayableTrackIndex('prev');
 
-    state.index = queue[previousPosition];
+    if (typeof previousIndex !== 'number') {
+      tracePlayback('playback.prev.skipped', {
+        reason: 'missing-previous-index',
+      });
+      return;
+    }
+
+    kill();
+    state.index = previousIndex;
     state.offset = 0;
     tracePlayback('playback.prev.selected', {
       previousIndex: state.index,
@@ -1462,6 +1576,7 @@ export function createPlaybackController({
     saveSettings({
       shuffle: state.shuffle,
       normalize: state.normalize,
+      allowExplicit: state.allowExplicit,
     });
   }
 
@@ -1476,6 +1591,7 @@ export function createPlaybackController({
     saveSettings({
       shuffle: state.shuffle,
       normalize: state.normalize,
+      allowExplicit: state.allowExplicit,
     });
 
     if (dom.audioElement?.src) {
@@ -1484,6 +1600,20 @@ export function createPlaybackController({
         resumePlayback: state.isPlaying,
       });
     }
+  }
+
+  function setAllowExplicit(enabled) {
+    state.allowExplicit = Boolean(enabled);
+    dom.explicitBtn?.classList.toggle('on', state.allowExplicit);
+  }
+
+  function toggleAllowExplicit() {
+    setAllowExplicit(!state.allowExplicit);
+    saveSettings({
+      shuffle: state.shuffle,
+      normalize: state.normalize,
+      allowExplicit: state.allowExplicit,
+    });
   }
 
   function goToLibrary() {
@@ -1697,6 +1827,7 @@ export function createPlaybackController({
     bindAudioEvents,
     bindVisibilityEvents,
     goToLibrary,
+    isTrackAllowed,
     kill,
     next,
     pause,
@@ -1706,11 +1837,13 @@ export function createPlaybackController({
     previewStartOffset,
     refreshAudioElementLayout,
     primeCurrentTrackSource,
+    setAllowExplicit,
     setNormalize,
     setShuffle,
     setupMediaSessionHandlers,
     startTrack,
     syncMediaMetadata,
+    toggleAllowExplicit,
     toggleNormalize,
     toggleShuffle,
   };

@@ -52,6 +52,12 @@ export function createUiController({
       dom.trackStartInfoEl.textContent = '';
       dom.trackStartInfoEl.style.display = 'none';
     }
+
+    if (dom.explicitTrackToggleEl) {
+      dom.explicitTrackToggleEl.disabled = true;
+      dom.explicitTrackToggleEl.classList.remove('on');
+      dom.explicitTrackToggleEl.setAttribute('aria-pressed', 'false');
+    }
   }
 
   function ensureDefaultPlaylist() {
@@ -152,6 +158,9 @@ export function createUiController({
 
     const currentPlaylist = getCurrentPlaylist();
     const playlistName = currentPlaylist?.name ?? 'no playlist';
+    const isExplicit = currentTrackKey
+      ? state.explicitTrackKeys.has(currentTrackKey)
+      : false;
 
     if (dom.trackTitleEl) {
       if (freshCurrentFile) {
@@ -178,6 +187,18 @@ export function createUiController({
         dom.trackArtworkEl.style.display = 'none';
         dom.trackArtworkEl.removeAttribute('src');
       }
+    }
+
+    if (dom.explicitTrackToggleEl) {
+      dom.explicitTrackToggleEl.disabled = !freshCurrentFile;
+      dom.explicitTrackToggleEl.classList.toggle(
+        'on',
+        Boolean(freshCurrentFile && isExplicit)
+      );
+      dom.explicitTrackToggleEl.setAttribute(
+        'aria-pressed',
+        freshCurrentFile && isExplicit ? 'true' : 'false'
+      );
     }
 
     if (dom.playlistViewEl) {

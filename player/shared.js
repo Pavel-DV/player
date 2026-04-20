@@ -65,6 +65,10 @@ function shuffleItems(items) {
   return shuffled;
 }
 
+export function isTrackExplicit(state, trackKey) {
+  return Boolean(trackKey && state.explicitTrackKeys?.has(trackKey));
+}
+
 export function getPlaylistItemOrder(state, playlistId = state.currentPlaylistId) {
   const playlist = state.playlists.find(item => item.id === playlistId);
 
@@ -106,18 +110,21 @@ export function getPlaylistItemOrder(state, playlistId = state.currentPlaylistId
 
 export function getQueueIndices(state) {
   const playlist = state.playlists.find(item => item.id === state.currentPlaylistId);
+  const canPlayTrack = trackKey => state.allowExplicit || !isTrackExplicit(state, trackKey);
 
   if (playlist && Array.isArray(playlist.items) && playlist.items.length > 0) {
     const indices = getPlaylistItemOrder(state, playlist.id)
+      .filter(canPlayTrack)
       .map(key => state.fileIndexByKey.get(key))
       .filter(index => typeof index === 'number');
 
-    if (indices.length > 0) {
-      return indices;
-    }
+    return indices;
   }
 
-  return state.files.map((_, index) => index);
+  return state.files
+    .map((file, index) => ({ index, key: getFileKey(file) }))
+    .filter(item => canPlayTrack(item.key))
+    .map(item => item.index);
 }
 
 export function buildDefaultArtwork() {

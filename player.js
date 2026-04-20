@@ -5,12 +5,14 @@ import { createScreenNavigator } from './player/navigation.js';
 import { createNormalizationService } from './player/normalization.js';
 import {
   clearPlayerCache,
+  loadExplicitInfo,
   loadNormInfo,
   loadPlaylistState,
   loadPlaylists,
   loadSettings,
   loadTrackStartTime,
   removePlaylistState,
+  saveExplicitInfo,
   saveNormInfo,
   savePlaylistState,
   savePlaylists,
@@ -31,7 +33,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '56';
+window.__playerBuildId = '57';
 console.log('Player build:', window.__playerBuildId);
 const { playlists, currentPlaylistId } = loadPlaylists();
 
@@ -62,6 +64,18 @@ function saveCurrentPlayerState() {
   });
 }
 
+function loadExplicitTrackKeys() {
+  state.explicitTrackKeys.clear();
+
+  state.files.forEach(file => {
+    const trackKey = getFileKey(file);
+
+    if (loadExplicitInfo(trackKey)) {
+      state.explicitTrackKeys.add(trackKey);
+    }
+  });
+}
+
 const library = createLibraryController({
   state,
   dom,
@@ -80,6 +94,9 @@ const library = createLibraryController({
     }
   },
   onLibraryLoaded: () => {
+    loadExplicitTrackKeys();
+    ui.renderList();
+    ui.renderPlaylistView();
     ui.restoreCurrentPlaylistTrack();
   },
 });
@@ -87,6 +104,50 @@ const library = createLibraryController({
 function lookupFileByKey(trackKey) {
   const fileIndex = state.fileIndexByKey.get(trackKey);
   return typeof fileIndex === 'number' ? state.files[fileIndex] : null;
+}
+
+function reconcileExplicitPlayback({
+  resumePlayback = false,
+  blockedBehavior = 'restore',
+} = {}) {
+  const currentFile = state.files[state.index];
+  const currentTrackKey = currentFile ? getFileKey(currentFile) : null;
+  const currentTrackAllowed = currentTrackKey
+    ? playback?.isTrackAllowed(currentTrackKey) !== false
+    : true;
+
+  ui.renderList();
+  ui.renderPlaylistView();
+
+  if (currentTrackAllowed) {
+    void ui.highlight();
+    return;
+  }
+
+  if (blockedBehavior === 'pause') {
+    if (state.isPlaying) {
+      playback?.pause();
+      return;
+    }
+
+    saveCurrentPlayerState();
+    void ui.highlight();
+    return;
+  }
+
+  const shouldResumePlayback = Boolean(resumePlayback && state.isPlaying);
+
+  playback?.kill();
+  const queue = ui.restoreCurrentPlaylistTrack();
+
+  if (queue.length === 0) {
+    saveCurrentPlayerState();
+    return;
+  }
+
+  if (shouldResumePlayback) {
+    playback?.play();
+  }
 }
 
 const normalization = createNormalizationService({
@@ -208,9 +269,54 @@ if (dom.clearCacheBtn) {
   };
 }
 
+if (dom.explicitBtn) {
+  dom.explicitBtn.onclick = () => {
+    const wasPlaying = state.isPlaying;
+    playback.toggleAllowExplicit();
+    reconcileExplicitPlayback({ resumePlayback: wasPlaying });
+  };
+}
+
+if (dom.explicitTrackToggleEl) {
+  dom.explicitTrackToggleEl.onclick = event => {
+    const target = event.currentTarget;
+    const trackKey = state.files[state.index]
+      ? getFileKey(state.files[state.index])
+      : null;
+
+    if (!(target instanceof HTMLButtonElement) || !trackKey) {
+      return;
+    }
+
+    const isExplicit = !state.explicitTrackKeys.has(trackKey);
+    saveExplicitInfo(trackKey, isExplicit);
+
+    if (isExplicit) {
+      state.explicitTrackKeys.add(trackKey);
+    } else {
+      state.explicitTrackKeys.delete(trackKey);
+    }
+
+    ui.renderList();
+    ui.renderPlaylistView();
+
+    if (playback?.isTrackAllowed(trackKey) === false) {
+      if (state.isPlaying) {
+        playback.pause();
+        return;
+      }
+
+      saveCurrentPlayerState();
+    }
+
+    void ui.highlight();
+  };
+}
+
 const settings = loadSettings();
 playback.setShuffle(settings.shuffle);
 playback.setNormalize(settings.normalize);
+playback.setAllowExplicit(settings.allowExplicit);
 
 ui.renderPlaylists();
 ui.renderPlaylistView();
@@ -238,6 +344,7 @@ window.player = {
   play: playback.play,
   prev: playback.prev,
   toggleNormalize: playback.toggleNormalize,
+  toggleAllowExplicit: playback.toggleAllowExplicit,
   toggleShuffle: playback.toggleShuffle,
 };
 
