@@ -16,6 +16,7 @@ export function createPlayerState() {
     files: [],
     playlists: [],
     currentPlaylistId: null,
+    shuffledPlaylistItemsById: new Map(),
     fileIndexByKey: new Map(),
     isSettingSrc: false,
     isInternalTransition: false,

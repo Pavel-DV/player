@@ -1281,19 +1281,8 @@ export function createPlaybackController({
 
     kill();
     const currentPosition = queue.indexOf(state.index);
-
-    if (state.shuffle) {
-      let nextPosition = Math.floor(Math.random() * queue.length);
-
-      if (queue.length > 1 && nextPosition === currentPosition) {
-        nextPosition = (nextPosition + 1) % queue.length;
-      }
-
-      state.index = queue[nextPosition];
-    } else {
-      const nextPosition = currentPosition >= 0 ? (currentPosition + 1) % queue.length : 0;
-      state.index = queue[nextPosition];
-    }
+    const nextPosition = currentPosition >= 0 ? (currentPosition + 1) % queue.length : 0;
+    state.index = queue[nextPosition];
 
     state.offset = 0;
     tracePlayback('playback.next.selected', {
@@ -1366,8 +1355,17 @@ export function createPlaybackController({
   }
 
   function setShuffle(enabled) {
-    state.shuffle = Boolean(enabled);
+    const nextShuffleState = Boolean(enabled);
+    const currentPlaylistId = state.currentPlaylistId;
+
+    if (nextShuffleState && !state.shuffle && currentPlaylistId) {
+      state.shuffledPlaylistItemsById.delete(currentPlaylistId);
+    }
+
+    state.shuffle = nextShuffleState;
     dom.shuffleBtn?.classList.toggle('on', state.shuffle);
+    ui.renderPlaylistView();
+    void ui.highlight();
   }
 
   function toggleShuffle() {

@@ -54,11 +54,61 @@ export function buildFileIndexByKey(files, getKey = getFileKey) {
   return indexByKey;
 }
 
+function shuffleItems(items) {
+  const shuffled = [...items];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled;
+}
+
+export function getPlaylistItemOrder(state, playlistId = state.currentPlaylistId) {
+  const playlist = state.playlists.find(item => item.id === playlistId);
+
+  if (!playlist || !Array.isArray(playlist.items) || playlist.items.length === 0) {
+    return [];
+  }
+
+  if (!state.shuffle) {
+    return playlist.items;
+  }
+
+  const cachedOrder = state.shuffledPlaylistItemsById.get(playlist.id);
+
+  if (Array.isArray(cachedOrder) && cachedOrder.length === playlist.items.length) {
+    return cachedOrder;
+  }
+
+  const currentTrackKey =
+    playlistId === state.currentPlaylistId && state.files[state.index]
+      ? getFileKey(state.files[state.index])
+      : null;
+  const itemsToShuffle = [...playlist.items];
+  const currentTrackPosition =
+    currentTrackKey ? itemsToShuffle.indexOf(currentTrackKey) : -1;
+
+  if (currentTrackPosition >= 0) {
+    itemsToShuffle.splice(currentTrackPosition, 1);
+  }
+
+  const shuffledOrder = shuffleItems(itemsToShuffle);
+
+  if (currentTrackPosition >= 0) {
+    shuffledOrder.unshift(currentTrackKey);
+  }
+
+  state.shuffledPlaylistItemsById.set(playlist.id, shuffledOrder);
+  return shuffledOrder;
+}
+
 export function getQueueIndices(state) {
   const playlist = state.playlists.find(item => item.id === state.currentPlaylistId);
 
   if (playlist && Array.isArray(playlist.items) && playlist.items.length > 0) {
-    const indices = playlist.items
+    const indices = getPlaylistItemOrder(state, playlist.id)
       .map(key => state.fileIndexByKey.get(key))
       .filter(index => typeof index === 'number');
 

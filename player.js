@@ -19,6 +19,7 @@ import { createPlayerState } from './player/state.js';
 import {
   getDisplayName,
   getFileKey,
+  getPlaylistItemOrder,
   getQueueIndices,
   isAudioFile,
 } from './player/shared.js';
@@ -27,7 +28,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '45';
+window.__playerBuildId = '46';
 console.log('Player build:', window.__playerBuildId);
 const { playlists, currentPlaylistId } = loadPlaylists();
 
@@ -86,6 +87,7 @@ const ui = createUiController({
   getFileKey,
   getDisplayName,
   getQueueIndices,
+  getPlaylistItemOrder,
   extractMetadata: metadataReader.extractMetadata,
   savePlaylists,
   loadPlaylistState,

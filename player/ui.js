@@ -13,6 +13,7 @@ export function createUiController({
   getFileKey,
   getDisplayName,
   getQueueIndices,
+  getPlaylistItemOrder,
   extractMetadata,
   savePlaylists,
   loadPlaylistState,
@@ -212,6 +213,7 @@ export function createUiController({
 
     const key = getFileKey(file);
     playlist.items.push(key);
+    state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
     renderPlaylistView();
     renderList();
@@ -247,6 +249,7 @@ export function createUiController({
       return;
     }
 
+    state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
     renderPlaylistView();
     renderList();
@@ -281,6 +284,7 @@ export function createUiController({
       key === (state.files[state.index] ? getFileKey(state.files[state.index]) : null);
 
     playlist.items.splice(indexToRemove, 1);
+    state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
 
     if (removingCurrentTrack) {
@@ -291,7 +295,7 @@ export function createUiController({
     renderList();
   }
 
-  function removeTrackByKey(key, itemIndex) {
+  function removeTrackByKey(key) {
     const playlist = getCurrentPlaylist();
 
     if (!playlist) {
@@ -301,7 +305,14 @@ export function createUiController({
     const removingCurrentTrack =
       key === (state.files[state.index] ? getFileKey(state.files[state.index]) : null);
 
+    const itemIndex = playlist.items.indexOf(key);
+
+    if (itemIndex === -1) {
+      return;
+    }
+
     playlist.items.splice(itemIndex, 1);
+    state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
 
     if (removingCurrentTrack) {
@@ -516,6 +527,7 @@ export function createUiController({
         if (playlistIndex >= 0) {
           const deletedPlaylistId = state.playlists[playlistIndex].id;
           state.playlists.splice(playlistIndex, 1);
+          state.shuffledPlaylistItemsById.delete(deletedPlaylistId);
           removePlaylistState(deletedPlaylistId);
         }
 
@@ -552,7 +564,7 @@ export function createUiController({
       return;
     }
 
-    playlist.items.forEach((key, itemIndex) => {
+    getPlaylistItemOrder(state, playlist.id).forEach(key => {
       const listItem = document.createElement('li');
       listItem.style.display = 'flex';
       listItem.style.alignItems = 'center';
@@ -567,7 +579,7 @@ export function createUiController({
       removeButton.style.height = '24px';
       removeButton.style.fontSize = '16px';
       removeButton.style.flexShrink = '0';
-      removeButton.onclick = () => removeTrackByKey(key, itemIndex);
+      removeButton.onclick = () => removeTrackByKey(key);
 
       const title = document.createElement('span');
       title.setAttribute('data-key', key);
