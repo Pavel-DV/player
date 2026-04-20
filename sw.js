@@ -1,4 +1,4 @@
-const CACHE_NAME = 'player-v7';
+const CACHE_NAME = 'player-v10';
 const ASSETS = [
   '/',
   '/index.html',
@@ -8,10 +8,13 @@ const ASSETS = [
   '/player/metadata.js',
   '/player/navigation.js',
   '/player/normalization.js',
+  '/player/opfs-library.js',
+  '/player/opfs-worker.js',
   '/player/playback.js',
   '/player/shared.js',
   '/player/state.js',
   '/player/storage.js',
+  '/player/track-rotation.js',
   '/player/ui.js'
 ];
 
@@ -38,9 +41,28 @@ self.addEventListener('fetch', e => {
     const clientUrl = client ? new URL(client.url) : null;
     const isRefreshRequest =
       url.searchParams.has('v') || Boolean(clientUrl?.searchParams.has('v'));
+    const isSameOriginAsset =
+      e.request.method === 'GET' && url.origin === self.location.origin;
 
     if (isRefreshRequest) {
       return fetch(e.request);
+    }
+
+    if (isSameOriginAsset) {
+      try {
+        const networkResponse = await fetch(e.request);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(e.request, networkResponse.clone());
+        return networkResponse;
+      } catch (error) {
+        const cachedResponse = await caches.match(e.request);
+
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        throw error;
+      }
     }
 
     const cachedResponse = await caches.match(e.request);

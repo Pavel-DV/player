@@ -4,6 +4,11 @@ import { createMetadataReader } from './player/metadata.js';
 import { createScreenNavigator } from './player/navigation.js';
 import { createNormalizationService } from './player/normalization.js';
 import {
+  deleteLibraryTrackFromOpfs,
+  loadLibraryFromOpfs,
+  saveLibraryToOpfs,
+} from './player/opfs-library.js';
+import {
   clearPlayerCache,
   loadExplicitInfo,
   loadNormInfo,
@@ -33,7 +38,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '67';
+window.__playerBuildId = '75';
 console.log('Player build:', window.__playerBuildId);
 const { playlists, currentPlaylistId } = loadPlaylists();
 
@@ -81,8 +86,12 @@ const library = createLibraryController({
   dom,
   isAudioFile,
   getFileKey,
+  deletePersistedTrack: trackKey => deleteLibraryTrackFromOpfs(trackKey),
+  loadPersistedLibrary: () => loadLibraryFromOpfs(),
+  persistLibrary: (files, options) => saveLibraryToOpfs(files, getFileKey, options),
   savePlaylists,
   renderList: () => ui.renderList(),
+  renderPlaylists: () => ui.renderPlaylists(),
   highlight: () => ui.highlight(),
   renderPlaylistView: () => ui.renderPlaylistView(),
   queueTracksForAnalysis: trackKeys => normalization.queueTracksForAnalysis(trackKeys),
@@ -200,6 +209,7 @@ const ui = createUiController({
     pauseSoft: () => playback?.pauseSoft(),
     play: () => playback?.play(),
     primeCurrentTrackSource: () => playback?.primeCurrentTrackSource(),
+    removeFromLibrary: trackIndex => library.removeTrackFromLibrary(trackIndex),
     startTrack: trackIndex => playback?.startTrack(trackIndex),
   },
 });
@@ -349,6 +359,7 @@ window.player = {
 };
 
 navigation.setScreen(1);
+void library.restorePersistedLibrary();
 
 window.addEventListener('beforeunload', () => {
   if (state.isPlaying && dom.audioElement) {

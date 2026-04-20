@@ -407,26 +407,32 @@ export function createUiController({
     state.files.forEach((file, itemIndex) => {
       const key = getFileKey(file);
       const libraryLabel = getDisplayName(key) || file?.name || key || 'Untitled track';
+      const isPersistedToOpfs = state.opfsPersistedTrackKeys.has(key);
+      const isPendingOpfsSave = state.opfsPendingTrackKeys.has(key);
       const listItem = document.createElement('li');
       listItem.style.display = 'flex';
       listItem.style.alignItems = 'center';
       listItem.style.gap = '8px';
       listItem.style.padding = '6px 0 6px 8px';
 
-      const addButton = document.createElement('button');
-      addButton.style.width = '24px';
-      addButton.style.height = '24px';
-      addButton.style.fontSize = '16px';
-      addButton.style.flexShrink = '0';
-
       const inPlaylist = playlistItems.has(key);
-      addButton.setAttribute('data-icon', inPlaylist ? 'minus' : 'plus');
+
+      const playlistButton = document.createElement('button');
+      playlistButton.style.width = '24px';
+      playlistButton.style.height = '24px';
+      playlistButton.style.padding = '0';
+      playlistButton.style.flexShrink = '0';
+      playlistButton.style.fontSize = '16px';
+      playlistButton.setAttribute('data-icon', inPlaylist ? 'minus' : 'plus');
+      playlistButton.title = inPlaylist
+        ? 'Remove from current playlist'
+        : 'Add to current playlist';
 
       if (inPlaylist) {
-        addButton.style.color = '#23fd23';
+        playlistButton.style.color = '#23fd23';
       }
 
-      addButton.onclick = event => {
+      playlistButton.onclick = event => {
         event.stopPropagation();
 
         if (inPlaylist) {
@@ -450,8 +456,28 @@ export function createUiController({
         }
       };
 
-      listItem.appendChild(addButton);
+      const opfsDeleteButton = document.createElement('button');
+      opfsDeleteButton.style.width = '24px';
+      opfsDeleteButton.style.height = '24px';
+      opfsDeleteButton.style.fontSize = '14px';
+      opfsDeleteButton.style.flexShrink = '0';
+      opfsDeleteButton.style.color =
+        isPersistedToOpfs ? '#23fd23' : '#e0e0e0';
+      opfsDeleteButton.textContent = 'X';
+      opfsDeleteButton.title = isPersistedToOpfs
+        ? 'Delete from OPFS'
+        : isPendingOpfsSave
+          ? 'Waiting to save to OPFS'
+          : 'Not saved to OPFS';
+      opfsDeleteButton.onclick = async event => {
+        event.stopPropagation();
+
+        await actions.removeFromLibrary?.(itemIndex);
+      };
+
+      listItem.appendChild(playlistButton);
       listItem.appendChild(title);
+      listItem.appendChild(opfsDeleteButton);
       dom.listEl.appendChild(listItem);
     });
   }
