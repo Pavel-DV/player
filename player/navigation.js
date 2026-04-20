@@ -55,7 +55,9 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
       return;
     }
 
-    state.touchScrollable = event.target.closest('#filelistwrapper, #playlistwrapper');
+    state.touchScrollable = event.target.closest(
+      '#filelistwrapper, #playlistswrapper'
+    );
     screens.forEach(screen => screen?.classList.remove('animate'));
   }
 

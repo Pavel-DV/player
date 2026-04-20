@@ -1,4 +1,4 @@
-const CACHE_NAME = 'player-v10';
+const CACHE_NAME = 'player-v12';
 const ASSETS = [
   '/',
   '/index.html',

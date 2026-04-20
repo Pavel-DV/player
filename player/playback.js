@@ -31,7 +31,6 @@ function setMediaSessionPlaybackState(state) {
 export function createPlaybackController({
   state,
   dom,
-  navigation,
   ui,
   getFileKey,
   getDisplayName,
@@ -1567,7 +1566,6 @@ export function createPlaybackController({
 
     state.shuffle = nextShuffleState;
     dom.shuffleBtn?.classList.toggle('on', state.shuffle);
-    ui.renderPlaylistView();
     void ui.highlight();
   }
 
@@ -1614,10 +1612,6 @@ export function createPlaybackController({
       normalize: state.normalize,
       allowExplicit: state.allowExplicit,
     });
-  }
-
-  function goToLibrary() {
-    navigation.setScreen(1);
   }
 
   function bindAudioEvents() {
@@ -1826,7 +1820,6 @@ export function createPlaybackController({
     applyVolumeForCurrentTrack,
     bindAudioEvents,
     bindVisibilityEvents,
-    goToLibrary,
     isTrackAllowed,
     kill,
     next,

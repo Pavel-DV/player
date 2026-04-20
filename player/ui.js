@@ -13,7 +13,6 @@ export function createUiController({
   getFileKey,
   getDisplayName,
   getQueueIndices,
-  getPlaylistItemOrder,
   extractMetadata,
   savePlaylists,
   loadPlaylistState,
@@ -26,7 +25,23 @@ export function createUiController({
   const playlistButtons = new Map();
 
   function getCurrentPlaylist() {
-    return state.playlists.find(playlist => playlist.id === state.currentPlaylistId) ?? null;
+    return (
+      state.playlists.find(playlist => playlist.id === state.currentPlaylistId) ??
+      state.playlists[0] ??
+      null
+    );
+  }
+
+  function getCurrentPlaylistName() {
+    return getCurrentPlaylist()?.name?.trim() ?? '';
+  }
+
+  function renderCurrentPlaylistName() {
+    if (!dom.currentPlaylistNameEl) {
+      return;
+    }
+
+    dom.currentPlaylistNameEl.textContent = getCurrentPlaylistName();
   }
 
   function clearTrackDisplay(clearGain = false) {
@@ -156,8 +171,7 @@ export function createUiController({
       return;
     }
 
-    const currentPlaylist = getCurrentPlaylist();
-    const playlistName = currentPlaylist?.name ?? 'no playlist';
+    const playlistName = getCurrentPlaylistName() || 'no playlist';
     const isExplicit = currentTrackKey
       ? state.explicitTrackKeys.has(currentTrackKey)
       : false;
@@ -201,24 +215,6 @@ export function createUiController({
       );
     }
 
-    if (dom.playlistViewEl) {
-      [...dom.playlistViewEl.children].forEach(item => {
-        const span = item.querySelector('span');
-
-        if (!span) {
-          return;
-        }
-
-        const key = span.getAttribute('data-key');
-
-        if (key === currentTrackKey && state.isPlaying) {
-          span.style.color = '#23fd23';
-        } else if (span.style.color !== '#999') {
-          span.style.color = '';
-        }
-      });
-    }
-
     onNowPlayingMetadata?.(freshCurrentFile, metadata, playlistName);
   }
 
@@ -241,7 +237,6 @@ export function createUiController({
     playlist.items.push(key);
     state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
-    renderPlaylistView();
     renderList();
     void highlight();
     queueTracksForAnalysis([key]);
@@ -277,7 +272,6 @@ export function createUiController({
 
     state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
-    renderPlaylistView();
     renderList();
     void highlight();
     queueTracksForAnalysis(newKeys);
@@ -317,35 +311,6 @@ export function createUiController({
       resetCurrentTrack(true);
     }
 
-    renderPlaylistView();
-    renderList();
-  }
-
-  function removeTrackByKey(key) {
-    const playlist = getCurrentPlaylist();
-
-    if (!playlist) {
-      return;
-    }
-
-    const removingCurrentTrack =
-      key === (state.files[state.index] ? getFileKey(state.files[state.index]) : null);
-
-    const itemIndex = playlist.items.indexOf(key);
-
-    if (itemIndex === -1) {
-      return;
-    }
-
-    playlist.items.splice(itemIndex, 1);
-    state.shuffledPlaylistItemsById.delete(playlist.id);
-    savePlaylists(state.playlists, state.currentPlaylistId);
-
-    if (removingCurrentTrack) {
-      resetCurrentTrack(true);
-    }
-
-    renderPlaylistView();
     renderList();
   }
 
@@ -357,7 +322,7 @@ export function createUiController({
     });
   }
 
-  function activatePlaylist(playlist, { autoplay, navigateToPlaylist }) {
+  function activatePlaylist(playlist, { autoplay, navigateToLibrary = false }) {
     if (state.isPlaying && dom.audioElement) {
       state.offset = dom.audioElement.currentTime || 0;
     }
@@ -367,13 +332,12 @@ export function createUiController({
     savePlaylists(state.playlists, state.currentPlaylistId);
     actions.kill();
     renderPlaylists();
-    renderPlaylistView();
     renderList();
 
     const queue = restorePlaylistTrack();
 
-    if (navigateToPlaylist) {
-      navigation.setScreen(3);
+    if (navigateToLibrary) {
+      navigation?.setScreen(1);
     }
 
     void highlight();
@@ -394,6 +358,7 @@ export function createUiController({
     }
 
     dom.listEl.innerHTML = '';
+    renderCurrentPlaylistName();
 
     const emptyMessage = document.getElementById('emptyLibraryMsg');
     if (emptyMessage) {
@@ -490,6 +455,7 @@ export function createUiController({
 
     dom.playlistsEl.innerHTML = '';
     playlistButtons.clear();
+    renderCurrentPlaylistName();
 
     state.playlists.forEach(playlist => {
       const listItem = document.createElement('li');
@@ -512,7 +478,7 @@ export function createUiController({
       selectButton.onclick = () =>
         activatePlaylist(playlist, {
           autoplay: false,
-          navigateToPlaylist: true,
+          navigateToLibrary: true,
         });
 
       if (playlist.id === state.currentPlaylistId) {
@@ -538,7 +504,6 @@ export function createUiController({
 
         activatePlaylist(playlist, {
           autoplay: true,
-          navigateToPlaylist: false,
         });
       };
       playlistButtons.set(playlist.id, playPauseButton);
@@ -590,7 +555,6 @@ export function createUiController({
 
         savePlaylists(state.playlists, state.currentPlaylistId);
         renderPlaylists();
-        renderPlaylistView();
         renderList();
       };
 
@@ -599,89 +563,6 @@ export function createUiController({
       listItem.appendChild(renameButton);
       listItem.appendChild(deleteButton);
       dom.playlistsEl.appendChild(listItem);
-    });
-  }
-
-  function renderPlaylistView() {
-    if (!dom.playlistViewEl) {
-      console.error('Cannot render playlist view because the element is missing');
-      return;
-    }
-
-    dom.playlistViewEl.innerHTML = '';
-
-    const playlist = getCurrentPlaylist();
-
-    if (!playlist) {
-      return;
-    }
-
-    getPlaylistItemOrder(state, playlist.id).forEach(key => {
-      const listItem = document.createElement('li');
-      listItem.style.display = 'flex';
-      listItem.style.alignItems = 'center';
-      listItem.style.padding = '6px 6px';
-
-      const isAvailable = state.fileIndexByKey.has(key);
-
-      const removeButton = document.createElement('button');
-      removeButton.setAttribute('data-icon', 'minus');
-      removeButton.style.marginRight = '10px';
-      removeButton.style.width = '24px';
-      removeButton.style.height = '24px';
-      removeButton.style.fontSize = '16px';
-      removeButton.style.flexShrink = '0';
-      removeButton.onclick = () => removeTrackByKey(key);
-
-      const title = document.createElement('span');
-      title.setAttribute('data-key', key);
-      title.style.cursor = isAvailable ? 'pointer' : 'default';
-      title.style.flex = '1';
-      title.style.fontSize = '14px';
-      title.style.lineHeight = '1.2';
-
-      if (!isAvailable) {
-        title.style.color = '#999';
-      }
-
-      const fileIndex = state.fileIndexByKey.get(key);
-      const file = typeof fileIndex === 'number' ? state.files[fileIndex] : null;
-
-      if (file) {
-        void extractMetadata(file).then(metadata => {
-          let label = metadata.title || getDisplayName(key);
-
-          if (metadata.artist) {
-            label += ` - ${metadata.artist}`;
-          }
-
-          title.textContent = label;
-        });
-      } else {
-        title.textContent = getDisplayName(key);
-      }
-
-      title.onclick = () => {
-        if (!isAvailable) {
-          console.warn(`Track "${key}" is not currently available`);
-          return;
-        }
-
-        const currentTrackKey = state.files[state.index]
-          ? getFileKey(state.files[state.index])
-          : null;
-
-        if (key === currentTrackKey && state.isPlaying) {
-          actions.pauseSoft();
-          return;
-        }
-
-        actions.startTrack(state.fileIndexByKey.get(key));
-      };
-
-      listItem.appendChild(removeButton);
-      listItem.appendChild(title);
-      dom.playlistViewEl.appendChild(listItem);
     });
   }
 
@@ -697,7 +578,6 @@ export function createUiController({
     state.currentPlaylistId = state.playlists[state.playlists.length - 1].id;
     savePlaylists(state.playlists, state.currentPlaylistId);
     renderPlaylists();
-    renderPlaylistView();
     renderList();
     actions.kill();
     state.offset = 0;
@@ -713,7 +593,6 @@ export function createUiController({
     highlight,
     renderList,
     renderPlaylists,
-    renderPlaylistView,
     restoreCurrentPlaylistTrack,
     updatePlaylistsButtons,
   };

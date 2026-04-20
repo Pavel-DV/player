@@ -15,13 +15,12 @@
 <style>
 html,body{height:100%;touch-action:pan-x;overflow:hidden;background:#1a1a1a;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont;line-height:1.25;-webkit-font-smoothing:antialiased;}
 body{margin:0;position:fixed;width:100%;height:100%}
-#screen1,#screen2,#screen3,#screen4{position:absolute;inset:0;width:100%;height:100%;will-change:transform;touch-action:pan-x;overflow:hidden}
+#screen1,#screen2,#screen3{position:absolute;inset:0;width:100%;height:100%;will-change:transform;touch-action:pan-x;overflow:hidden}
 #screen2{display:flex;flex-direction:column}
 #screen1{background:#1a1a1a;display:flex;flex-direction:column}
 #screen2{background:#222}
-#screen3{background:#252530;display:flex;flex-direction:column}
-#screen4{background:#2a2a20}
-#screen1.animate,#screen2.animate,#screen3.animate,#screen4.animate{transition:transform .2s ease}
+#screen3{background:#2a2a20;display:flex;flex-direction:column}
+#screen1.animate,#screen2.animate,#screen3.animate{transition:transform .2s ease}
 /* shuffle button state */
 #shuffleBtn{background:transparent;border-radius:0;color:#6f6f6f;transition:color .15s ease;font-size:38px}
 #shuffleBtn.on{color:#23fd23}
@@ -33,28 +32,27 @@ body{margin:0;position:fixed;width:100%;height:100%}
 #explicitTrackToggle{width:24px;height:24px;border-radius:0;font-size:16px;font-weight:700;background:transparent;color:#999;transition:color .15s ease}
 #explicitTrackToggle.on{background:transparent;color:#23fd23}
 /* scrollable lists */
-#filelistwrapper,#playlistwrapper {flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+#filelistwrapper,#playlistswrapper{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
 button{padding:0;font-size:20px;width:52px;height:52px;background:#333;color:#e0e0e0;border:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;line-height:1}
 #screen2 button[onclick*="prev"],#screen2 button[onclick*="next"]{width:73px;height:73px;font-size:0;position:relative;background:transparent;border-radius:0}
 #screen2 button[onclick*="prev"]::before,#screen2 button[onclick*="next"]::before{content:"";display:block;width:50px;height:50px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}
 #screen2 button[onclick*="prev"]::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='black'%20d='M8%208.5h3v15H8zM22.5%208.2v15.6L11.5%2016z'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='black'%20d='M8%208.5h3v15H8zM22.5%208.2v15.6L11.5%2016z'/%3E%3C/svg%3E")}
 #screen2 button[onclick*="next"]::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='black'%20d='M21%208.5h3v15h-3zM10%208.2%2020.5%2016%2010%2023.8z'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='black'%20d='M21%208.5h3v15h-3zM10%208.2%2020.5%2016%2010%2023.8z'/%3E%3C/svg%3E")}
-/* precise centered glyphs for small circle buttons (+ / −) */
+/* precise centered glyphs for small circle buttons (+ / -) */
 button[data-icon]{position:relative;font-size:0}
 button[data-icon]::before,button[data-icon='plus']::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:currentColor;border-radius:1px}
 button[data-icon]::before{width:14px;height:2px}
 button[data-icon='plus']::after{width:2px;height:14px}
 /* play / pause icons */
 button[data-icon='play']::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-40%,-50%);width:0;height:0;border-style:solid;border-width:10px 0 10px 16px;border-color:transparent transparent transparent currentColor;background:transparent}
-/* smaller play triangle on screen4 */
-#screen4 button[data-icon='play']::before{border-width:7px 0 7px 11px}
+/* smaller play triangle on playlists screen */
+#screen3 button[data-icon='play']::before{border-width:7px 0 7px 11px}
 button[data-icon='pause']::before,button[data-icon='pause']::after{content:"";position:absolute;top:50%;width:5px;height:18px;background:currentColor;border-radius:1px;transform:translateY(-50%)}
 button[data-icon='pause']::before{left:calc(50% - 6px)}
 button[data-icon='pause']::after{left:calc(50% + 6px - 5px)}
 body[data-screen="1"] #screen1{z-index:2}body[data-screen="1"] #screen2{z-index:1}body[data-screen="1"] #screen3{z-index:1}
 body[data-screen="2"] #screen2{z-index:2}body[data-screen="2"] #screen1{z-index:1}body[data-screen="2"] #screen3{z-index:1}
-body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:1}body[data-screen="3"] #screen2{z-index:1}body[data-screen="3"] #screen4{z-index:1}
-body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:1}body[data-screen="4"] #screen2{z-index:1}body[data-screen="4"] #screen3{z-index:1}
+body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:1}body[data-screen="3"] #screen2{z-index:1}
 #trackArtwork{width:140px;height:140px;border-radius:8px;margin-bottom:12px;display:none;transform-origin:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 #audioElement{width:calc(100% / 1.53);margin:0 auto 20px;display:block;transform:scale(1.53);transform-origin:center}
 @media (orientation: landscape){
@@ -65,9 +63,12 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 <body data-screen="1">
 
 <div id=screen1>
-<div style="display:flex;align-items:center;gap:12px;margin:14px 8px 8px 8px">
+<div style="display:flex;align-items:flex-start;gap:12px;margin:14px 8px 8px 8px">
+<div style="flex:1;min-width:0">
 <h2 style="margin:0;font-size:24px;font-weight:600">Library</h2>
-<button onclick="player.pickMusicDirectory()" style="width:32px;height:32px;font-size:20px">＋</button>
+<div id=currentPlaylistName style="margin-top:2px;color:#999;font-size:13px;line-height:1.3"></div>
+</div>
+<button onclick="player.pickMusicDirectory()" style="width:32px;height:32px;font-size:20px">+</button>
 <button id=addAllBtn onclick="player.addAllFilesToCurrentPlaylist()" style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px">Add All</button>
 <button onclick="refreshApp()" style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px;background:#0a84ff;color:#fff">Refresh</button>
 </div>
@@ -83,7 +84,7 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
 <div id=screen2>
     <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:12px 20px">
         <img id=trackArtwork draggable="false">
-        <h1 id=trackTitle style="margin:0;font-size:22px">—</h1>
+        <h1 id=trackTitle style="margin:0;font-size:22px">&mdash;</h1>
         <span id=trackArtist style="color:#999;font-size:16px;margin-top:6px"></span>
         <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
             <span id=gainInfo style="color:#666;font-size:13px"></span>
@@ -93,31 +94,24 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
     </div>
     <audio id=audioElement controls preload="none" x-webkit-airplay="allow" webkit-playsinline playsinline></audio>
     <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:20px">
-        <button id=shuffleBtn onclick="player.toggleShuffle()">⤭</button>
-        <button onclick="player.prev()">⏮︎</button>
-        <button onclick="player.next()">⏭︎</button>
-        <button id=normalizeBtn onclick="player.toggleNormalize()">♪</button>
+        <button id=shuffleBtn onclick="player.toggleShuffle()">&#x292D;</button>
+        <button onclick="player.prev()">&#x23EE;&#xFE0E;</button>
+        <button onclick="player.next()">&#x23ED;&#xFE0E;</button>
+        <button id=normalizeBtn onclick="player.toggleNormalize()">&#x266A;</button>
     </div>
 </div>
 
 <div id=screen3>
 <div style="display:flex;align-items:center;gap:12px;margin:14px 8px 8px 8px">
-<h2 style="margin:0;font-size:24px;font-weight:600">Songs</h2>
-<button onclick="player.goToLibrary()" style="width:32px;height:32px;font-size:20px">＋</button>
-</div>
-<div id=playlistwrapper style="flex:1;min-height:0;overflow-y:auto;padding:0 8px;touch-action:pan-y;-webkit-overflow-scrolling:touch">
-<ol id=playlistView style="list-style:none;padding:0;margin:0"></ol>
-</div>
-</div>
-<div id=screen4>
-<div style="display:flex;align-items:center;gap:12px;margin:14px 8px 8px 8px">
 <h2 style="margin:0;font-size:24px;font-weight:600">Playlists</h2>
-<button id=addPlaylist style="width:32px;height:32px;font-size:20px">＋</button>
+<button id=addPlaylist style="width:32px;height:32px;font-size:20px">+</button>
 <button id=explicitBtn style="width:auto;height:32px;padding:0 12px;border-radius:16px;font-size:14px">Explicit</button>
 </div>
-<ol id=playlists style="list-style:none;padding:0;margin:0 8px"></ol>
-<div style="margin:20px 8px">
+<div id=playlistswrapper style="flex:1;min-height:0;overflow-y:auto;padding:0 8px;touch-action:pan-y;-webkit-overflow-scrolling:touch">
+<ol id=playlists style="list-style:none;padding:0;margin:0"></ol>
+<div style="margin:20px 0">
 <button id=clearCacheBtn style="width:auto;padding:8px 16px;border-radius:8px;font-size:14px">Clear Cache</button>
+</div>
 </div>
 </div>
 <script>
@@ -155,7 +149,7 @@ async function refreshApp() {
 }
 
 window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
 });
 </script>
 </body>

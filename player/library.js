@@ -24,7 +24,6 @@ export function createLibraryController({
   renderList,
   renderPlaylists,
   highlight,
-  renderPlaylistView,
   queueTracksForAnalysis,
   onCurrentTrackUnavailable,
   onLibraryLoaded,
@@ -129,7 +128,6 @@ export function createLibraryController({
     }
 
     renderList();
-    renderPlaylistView();
     void highlight();
     queueTracksForAnalysis(state.files.map(getFileKey));
     onLibraryLoaded?.();

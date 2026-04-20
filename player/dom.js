@@ -10,8 +10,8 @@ export function getPlayerDom() {
     trackStartInfoEl: document.getElementById('trackStartInfo'),
     explicitTrackToggleEl: document.getElementById('explicitTrackToggle'),
     addAllBtn: document.getElementById('addAllBtn'),
+    currentPlaylistNameEl: document.getElementById('currentPlaylistName'),
     playlistsEl: document.getElementById('playlists'),
-    playlistViewEl: document.getElementById('playlistView'),
     addPlaylistBtn: document.getElementById('addPlaylist'),
     explicitBtn: document.getElementById('explicitBtn'),
     shuffleBtn: document.getElementById('shuffleBtn'),
@@ -21,7 +21,6 @@ export function getPlayerDom() {
       document.getElementById('screen1'),
       document.getElementById('screen2'),
       document.getElementById('screen3'),
-      document.getElementById('screen4'),
     ].filter(Boolean),
   };
 }

@@ -28,7 +28,6 @@ import { createPlayerState } from './player/state.js';
 import {
   getDisplayName,
   getFileKey,
-  getPlaylistItemOrder,
   getQueueIndices,
   isAudioFile,
 } from './player/shared.js';
@@ -38,7 +37,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '75';
+window.__playerBuildId = '80';
 console.log('Player build:', window.__playerBuildId);
 const { playlists, currentPlaylistId } = loadPlaylists();
 
@@ -93,7 +92,6 @@ const library = createLibraryController({
   renderList: () => ui.renderList(),
   renderPlaylists: () => ui.renderPlaylists(),
   highlight: () => ui.highlight(),
-  renderPlaylistView: () => ui.renderPlaylistView(),
   queueTracksForAnalysis: trackKeys => normalization.queueTracksForAnalysis(trackKeys),
   onCurrentTrackUnavailable: () => {
     playback?.kill();
@@ -105,7 +103,6 @@ const library = createLibraryController({
   onLibraryLoaded: () => {
     loadExplicitTrackKeys();
     ui.renderList();
-    ui.renderPlaylistView();
     ui.restoreCurrentPlaylistTrack();
   },
 });
@@ -126,7 +123,6 @@ function reconcileExplicitPlayback({
     : true;
 
   ui.renderList();
-  ui.renderPlaylistView();
 
   if (currentTrackAllowed) {
     void ui.highlight();
@@ -184,7 +180,6 @@ const ui = createUiController({
   getFileKey,
   getDisplayName,
   getQueueIndices,
-  getPlaylistItemOrder,
   extractMetadata: metadataReader.extractMetadata,
   savePlaylists,
   loadPlaylistState,
@@ -217,7 +212,6 @@ const ui = createUiController({
 playback = createPlaybackController({
   state,
   dom,
-  navigation,
   ui,
   getFileKey,
   getDisplayName,
@@ -308,7 +302,6 @@ if (dom.explicitTrackToggleEl) {
     }
 
     ui.renderList();
-    ui.renderPlaylistView();
 
     if (playback?.isTrackAllowed(trackKey) === false) {
       if (state.isPlaying) {
@@ -329,7 +322,6 @@ playback.setNormalize(settings.normalize);
 playback.setAllowExplicit(settings.allowExplicit);
 
 ui.renderPlaylists();
-ui.renderPlaylistView();
 ui.renderList();
 void ui.highlight();
 
@@ -347,7 +339,6 @@ dom.audioElement?.addEventListener('durationchange', () => {
 
 window.player = {
   addAllFilesToCurrentPlaylist: ui.addAllFilesToCurrentPlaylist,
-  goToLibrary: playback.goToLibrary,
   next: playback.next,
   pause: playback.pause,
   pickMusicDirectory: library.pickMusicDirectory,
