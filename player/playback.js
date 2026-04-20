@@ -837,31 +837,66 @@ export function createPlaybackController({
     }
   }
 
-  function restoreCurrentTrackSource() {
+  function reloadCurrentTrackSource({
+    reason = 'unknown',
+    resumePlayback = false,
+  } = {}) {
     const file = state.files[state.index];
 
     if (!file || !dom.audioElement) {
       return Promise.resolve(false);
     }
 
+    if (resumePlayback) {
+      state.offset = dom.audioElement.currentTime || state.offset || 0;
+      state.pendingStartOffset = null;
+      state.isInternalTransition = true;
+      dom.audioElement.pause();
+      state.isPlaying = false;
+      tracePlayback('audio.source.reload.begin', {
+        offset: Number(state.offset.toFixed(3)),
+        reason,
+        resumePlayback,
+        trackKey: getFileKey(file),
+      });
+    }
+
     return buildPreparedSource(file)
       .then(({ isNormalized, source }) => {
         setAudioSource(source, { isNormalizedSource: isNormalized });
         state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
-        tracePlayback('audio.source.restore.success', {
+        tracePlayback('audio.source.reload.success', {
           isNormalizedSource: isNormalized,
           pendingStartOffset: state.pendingStartOffset,
+          reason,
+          resumePlayback,
           trackKey: getFileKey(file),
         });
+
+        if (resumePlayback) {
+          const sequenceId = ++state.playSequence;
+          bindEndedHandler(sequenceId, 'audio.source.reload.resume');
+          playWhenSourceReady(sequenceId, 'Failed to resume playback after reload:');
+        }
+
         return true;
       })
       .catch(error => {
-        console.error('Failed to restore current track source:', error);
-        tracePlayback('audio.source.restore.failed', {
+        console.error('Failed to reload current track source:', error);
+        tracePlayback('audio.source.reload.failed', {
           error: summarizeError(error),
+          reason,
+          resumePlayback,
         });
         return false;
       });
+  }
+
+  function restoreCurrentTrackSource() {
+    return reloadCurrentTrackSource({
+      reason: 'restoreCurrentTrackSource',
+      resumePlayback: false,
+    });
   }
 
   function primeCurrentTrackSource() {
@@ -1261,8 +1296,11 @@ export function createPlaybackController({
       normalize: state.normalize,
     });
 
-    if (!state.isPlaying && dom.audioElement?.src) {
-      void restoreCurrentTrackSource();
+    if (dom.audioElement?.src) {
+      void reloadCurrentTrackSource({
+        reason: 'toggleNormalize',
+        resumePlayback: state.isPlaying,
+      });
     }
   }
 
