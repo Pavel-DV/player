@@ -1,6 +1,7 @@
 const AUDIO_FILE_PATTERN = /\.(mp3|m4a|wav|ogg|flac)$/i;
 export const RESUME_DELAY_MS = 10;
 const fileKeyOverrides = new WeakMap();
+let cachedDefaultArtwork = null;
 
 export function isAudioFile(file) {
   return AUDIO_FILE_PATTERN.test(file?.name ?? '');
@@ -128,6 +129,31 @@ export function getQueueIndices(state) {
 }
 
 export function buildDefaultArtwork() {
+  if (cachedDefaultArtwork) {
+    return cachedDefaultArtwork;
+  }
+
+  if (typeof document !== 'undefined') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+
+    const context = canvas.getContext('2d');
+
+    if (context) {
+      context.fillStyle = '#1a1a1a';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = '#23fd23';
+      context.font =
+        '700 280px -apple-system, BlinkMacSystemFont, system-ui, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText('V', canvas.width / 2, 284);
+      cachedDefaultArtwork = canvas.toDataURL('image/png');
+      return cachedDefaultArtwork;
+    }
+  }
+
   const svg = [
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">',
     '<rect width="512" height="512" fill="#1a1a1a"/>',
@@ -135,5 +161,6 @@ export function buildDefaultArtwork() {
     '</svg>',
   ].join('');
 
-  return `data:image/svg+xml;base64,${window.btoa(svg)}`;
+  cachedDefaultArtwork = `data:image/svg+xml;base64,${window.btoa(svg)}`;
+  return cachedDefaultArtwork;
 }

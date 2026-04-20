@@ -223,6 +223,7 @@ export function createPlaybackController({
 
     const trackKey = getFileKey(file);
     const artworkSource = metadata.artwork || buildDefaultArtwork();
+    const artworkType = artworkSource.match(/^data:([^;,]+)/)?.[1] ?? null;
     const mediaMetadataPayload = {
       album: playlistName,
       artist: metadata.artist || playlistName,
@@ -230,7 +231,7 @@ export function createPlaybackController({
         {
           src: artworkSource,
           sizes: '512x512',
-          type: metadata.artwork ? 'image/jpeg' : 'image/svg+xml',
+          ...(artworkType ? { type: artworkType } : {}),
         },
       ],
       title: metadata.title || getDisplayName(trackKey),
