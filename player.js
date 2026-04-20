@@ -27,7 +27,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '37';
+window.__playerBuildId = '45';
 console.log('Player build:', window.__playerBuildId);
 const { playlists, currentPlaylistId } = loadPlaylists();
 
@@ -195,7 +195,6 @@ void ui.highlight();
 
 playback.bindAudioEvents();
 playback.bindVisibilityEvents();
-playback.setupMediaSessionHandlers();
 navigation.bindTouchNavigation();
 
 window.player = {

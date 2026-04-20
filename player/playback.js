@@ -5,6 +5,7 @@ import {
 } from './shared.js';
 
 const PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS = 3;
+const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
 
 function setMediaSessionPlaybackState(state) {
   if (!('mediaSession' in navigator)) {
@@ -36,6 +37,8 @@ export function createPlaybackController({
   let currentSourceTrackKey = null;
   let cachedNormalizedBlob = null;
   let cachedNormalizedTrackKey = null;
+  let hasLoggedPlaybackAudioSessionReady = false;
+  let lastEndedHandlerSequenceId = null;
 
   function summarizeError(error) {
     if (!error) {
@@ -81,14 +84,19 @@ export function createPlaybackController({
     }
 
     try {
-      if (navigator.audioSession.type !== 'playback') {
+      const previousType = navigator.audioSession.type;
+
+      if (previousType !== 'playback') {
         navigator.audioSession.type = 'playback';
       }
 
-      tracePlayback('audioSession.type.ready', {
-        reason,
-        type: navigator.audioSession.type,
-      });
+      if (!hasLoggedPlaybackAudioSessionReady || previousType !== 'playback') {
+        hasLoggedPlaybackAudioSessionReady = true;
+        tracePlayback('audioSession.type.ready', {
+          reason,
+          type: navigator.audioSession.type,
+        });
+      }
     } catch (error) {
       console.error('Failed to configure audio session:', error);
       tracePlayback('audioSession.type.failed', {
@@ -247,6 +255,42 @@ export function createPlaybackController({
     );
   }
 
+  function normalizeStartOffset(offset, duration) {
+    if (!(Number.isFinite(offset) && offset > 0)) {
+      return 0;
+    }
+
+    if (Number.isFinite(duration) && duration > 0) {
+      return offset >= duration - START_OFFSET_END_TOLERANCE_SECONDS ? 0 : offset;
+    }
+
+    return offset;
+  }
+
+  function syncPendingStartOffset(reason = 'unknown') {
+    if (!dom.audioElement) {
+      return;
+    }
+
+    const nextOffset = normalizeStartOffset(
+      state.pendingStartOffset,
+      dom.audioElement.duration
+    );
+
+    if (nextOffset !== state.pendingStartOffset) {
+      tracePlayback('audio.start-offset.normalized', {
+        duration: Number.isFinite(dom.audioElement.duration)
+          ? Number(dom.audioElement.duration.toFixed(3))
+          : null,
+        normalizedOffset: nextOffset,
+        previousOffset: state.pendingStartOffset,
+        reason,
+      });
+      state.pendingStartOffset = nextOffset;
+      state.offset = nextOffset;
+    }
+  }
+
   function setupMediaSessionHandlers() {
     if (!('mediaSession' in navigator) || !dom.audioElement) {
       tracePlayback('mediaSession.handlers.skipped', {
@@ -256,6 +300,8 @@ export function createPlaybackController({
       return;
     }
 
+    // iPhone Safari may drop lock-screen prev/next controls after source changes
+    // unless Media Session handlers are re-registered during playback transitions.
     tracePlayback('mediaSession.handlers.setup.begin');
 
     const safeSetHandler = (action, handler) => {
@@ -326,7 +372,6 @@ export function createPlaybackController({
         syncMediaSession('action.seekto');
       }
     });
-
     tracePlayback('mediaSession.handlers.setup.end');
   }
 
@@ -742,10 +787,18 @@ export function createPlaybackController({
     }
 
     let hasStarted = false;
+    let timeoutId = null;
     tracePlayback('playWhenSourceReady.begin', {
       errorLabel,
       sequenceId,
     });
+
+    const clearStartTimeout = () => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
 
     const startPlayback = () => {
       if (hasStarted) {
@@ -757,6 +810,7 @@ export function createPlaybackController({
       }
 
       hasStarted = true;
+      clearStartTimeout();
       dom.audioElement?.removeEventListener('loadedmetadata', handleReady);
       dom.audioElement?.removeEventListener('canplay', handleReady);
 
@@ -802,7 +856,8 @@ export function createPlaybackController({
     tracePlayback('playWhenSourceReady.load.called', {
       sequenceId,
     });
-    window.setTimeout(() => {
+    timeoutId = window.setTimeout(() => {
+      timeoutId = null;
       tracePlayback('playWhenSourceReady.timeout', {
         sequenceId,
       });
@@ -945,6 +1000,7 @@ export function createPlaybackController({
           markInternalTransition: false,
         });
         state.pendingStartOffset = Number.isFinite(state.offset) ? state.offset : 0;
+        dom.audioElement.load();
         state.isInternalTransition = false;
         tracePlayback('audio.source.prime.success', {
           isNormalizedSource: isNormalized,
@@ -964,6 +1020,10 @@ export function createPlaybackController({
 
   function bindEndedHandler(sequenceId, source = 'unknown') {
     if (!dom.audioElement) {
+      return;
+    }
+
+    if (lastEndedHandlerSequenceId === sequenceId) {
       return;
     }
 
@@ -989,6 +1049,7 @@ export function createPlaybackController({
       next();
     };
 
+    lastEndedHandlerSequenceId = sequenceId;
     tracePlayback('audio.onended.bound', {
       sequenceId,
       source,
@@ -1018,8 +1079,6 @@ export function createPlaybackController({
       if (dom.gainInfoEl) {
         dom.gainInfoEl.textContent = '';
       }
-
-      console.warn(`Cannot apply volume because there is no file at index ${state.index}`);
       return;
     }
 
@@ -1060,6 +1119,7 @@ export function createPlaybackController({
     }
 
     ensurePlaybackAudioSession('playback.play');
+    // Keep this on each play path; one-time setup caused lock-screen track buttons to disappear.
     setupMediaSessionHandlers();
 
     const file = state.files[state.index];
@@ -1103,9 +1163,10 @@ export function createPlaybackController({
       });
       bindEndedHandler(state.playSequence, 'playback.play.resume-existing-source');
       try {
-        dom.audioElement.currentTime = Number.isFinite(state.offset)
-          ? state.offset
-          : dom.audioElement.currentTime || 0;
+        dom.audioElement.currentTime = normalizeStartOffset(
+          state.offset,
+          dom.audioElement.duration
+        );
       } catch (error) {
         console.error('Failed to restore current time:', error);
         tracePlayback('playback.play.restore-time.failed', {
@@ -1357,6 +1418,7 @@ export function createPlaybackController({
       if (hasPlayableSource) {
         ensurePlaybackAudioSession('audio.event.play.active-source');
         applyVolumeForCurrentTrack();
+        // Re-register on the media element's play event so iPhone Safari keeps lock-screen controls.
         setupMediaSessionHandlers();
         bindEndedHandler(state.playSequence, 'audio.event.play.active-source');
       }
@@ -1389,6 +1451,7 @@ export function createPlaybackController({
     dom.audioElement.addEventListener('playing', () => {
       tracePlayback('audio.event.playing');
       state.isInternalTransition = false;
+      syncPendingStartOffset('audio.playing');
 
       if (
         typeof state.pendingStartOffset === 'number' &&
@@ -1432,6 +1495,26 @@ export function createPlaybackController({
     });
 
     dom.audioElement.addEventListener('loadedmetadata', () => {
+      syncPendingStartOffset('audio.loadedmetadata');
+
+      if (
+        typeof state.pendingStartOffset === 'number' &&
+        state.pendingStartOffset > 0 &&
+        Math.abs((dom.audioElement.currentTime || 0) - state.pendingStartOffset) > 0.25
+      ) {
+        try {
+          dom.audioElement.currentTime = state.pendingStartOffset;
+          tracePlayback('audio.event.loadedmetadata.offset-applied', {
+            pendingStartOffset: state.pendingStartOffset,
+          });
+        } catch (error) {
+          tracePlayback('audio.event.loadedmetadata.offset-failed', {
+            error: summarizeError(error),
+            pendingStartOffset: state.pendingStartOffset,
+          });
+        }
+      }
+
       tracePlayback('audio.event.loadedmetadata');
       tracePlayback('audio.event.loadedmetadata.offset-pending', {
         pendingStartOffset: state.pendingStartOffset,
@@ -1458,6 +1541,10 @@ export function createPlaybackController({
       tracePlayback('audio.event.seeked');
       state.offset = dom.audioElement.currentTime || 0;
       syncMediaSession('audio.seeked');
+
+      if (!state.isPlaying && dom.audioElement.paused) {
+        refreshAudioElementLayout();
+      }
     });
 
     dom.audioElement.addEventListener('timeupdate', () => {
@@ -1478,12 +1565,28 @@ export function createPlaybackController({
       return;
     }
 
+    const persistPlaybackPosition = () => {
+      const hasPlayableSource =
+        Boolean(dom.audioElement.src) && dom.audioElement.src !== window.location.href;
+
+      if (!hasPlayableSource && !state.isPlaying) {
+        return;
+      }
+
+      state.offset = dom.audioElement.currentTime || state.offset || 0;
+      savePlayerState();
+    };
+
     tracePlayback('visibility.events.bind');
 
     document.addEventListener('visibilitychange', () => {
       tracePlayback('document.visibilitychange', {
         hidden: document.hidden,
       });
+
+      if (document.hidden) {
+        persistPlaybackPosition();
+      }
 
       if (state.isPlaying) {
         ensurePlaybackAudioSession(
@@ -1497,8 +1600,9 @@ export function createPlaybackController({
             : 'document.visibilitychange.visible'
         );
       }
-
     });
+
+    window.addEventListener('pagehide', persistPlaybackPosition);
   }
 
   return {
