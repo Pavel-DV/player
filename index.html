@@ -35,7 +35,10 @@ body{margin:0;position:fixed;width:100%;height:100%}
 /* scrollable lists */
 #filelistwrapper,#playlistwrapper {flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
 button{padding:0;font-size:20px;width:52px;height:52px;background:#333;color:#e0e0e0;border:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;line-height:1}
-#screen2 button[onclick*="prev"],#screen2 button[onclick*="next"]{width:73px;height:73px;font-size:30px}
+#screen2 button[onclick*="prev"],#screen2 button[onclick*="next"]{width:73px;height:73px;font-size:0;position:relative;background:transparent;border-radius:0}
+#screen2 button[onclick*="prev"]::before,#screen2 button[onclick*="next"]::before{content:"";display:block;width:50px;height:50px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}
+#screen2 button[onclick*="prev"]::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='black'%20d='M8%208.5h3v15H8zM22.5%208.2v15.6L11.5%2016z'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='black'%20d='M8%208.5h3v15H8zM22.5%208.2v15.6L11.5%2016z'/%3E%3C/svg%3E")}
+#screen2 button[onclick*="next"]::before{-webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='black'%20d='M21%208.5h3v15h-3zM10%208.2%2020.5%2016%2010%2023.8z'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='black'%20d='M21%208.5h3v15h-3zM10%208.2%2020.5%2016%2010%2023.8z'/%3E%3C/svg%3E")}
 /* precise centered glyphs for small circle buttons (+ / −) */
 button[data-icon]{position:relative;font-size:0}
 button[data-icon]::before,button[data-icon='plus']::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:currentColor;border-radius:1px}
@@ -88,7 +91,7 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
         <button id=shuffleBtn onclick="player.toggleShuffle()">⤭</button>
         <button onclick="player.prev()">⏮︎</button>
         <button onclick="player.next()">⏭︎</button>
-        <button id=normalizeBtn onclick="player.toggleNormalize()">⚏</button>
+        <button id=normalizeBtn onclick="player.toggleNormalize()">♪</button>
     </div>
 </div>
 
