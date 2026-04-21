@@ -178,6 +178,64 @@ export function createUiController({
     savePlayerState();
   }
 
+  function activateAdjacentTrackAfterRemoval(
+    queueBeforeRemoval,
+    { clearGain = false, resumePlayback = false } = {}
+  ) {
+    const playlistItems = new Set(getCurrentPlaylist()?.items ?? []);
+    const currentQueuePosition = Array.isArray(queueBeforeRemoval)
+      ? queueBeforeRemoval.indexOf(state.index)
+      : -1;
+    let nextIndex = null;
+
+    if (currentQueuePosition >= 0) {
+      for (
+        let offset = 1;
+        offset < queueBeforeRemoval.length;
+        offset += 1
+      ) {
+        const candidateIndex =
+          queueBeforeRemoval[
+            (currentQueuePosition + offset) % queueBeforeRemoval.length
+          ];
+        const candidateFile = state.files[candidateIndex];
+        const candidateKey = candidateFile ? getFileKey(candidateFile) : null;
+
+        if (candidateKey && playlistItems.has(candidateKey)) {
+          nextIndex = candidateIndex;
+          break;
+        }
+      }
+    }
+
+    actions.kill();
+    state.offset = 0;
+
+    if (typeof nextIndex === 'number') {
+      state.index = nextIndex;
+    } else {
+      const queue = restorePlaylistTrack();
+
+      if (queue.length === 0) {
+        state.index = -1;
+        clearTrackDisplay(clearGain);
+        void highlight();
+        savePlayerState();
+        return;
+      }
+    }
+
+    savePlayerState();
+    void highlight();
+
+    if (resumePlayback) {
+      actions.play();
+      return;
+    }
+
+    actions.primeCurrentTrackSource?.();
+  }
+
   async function highlight() {
     if (dom.listEl) {
       [...dom.listEl.children].forEach((listItem, itemIndex) => {
@@ -342,16 +400,21 @@ export function createUiController({
 
     const removingCurrentTrack =
       key === (state.files[state.index] ? getFileKey(state.files[state.index]) : null);
+    const queueBeforeRemoval = removingCurrentTrack ? getQueueIndices(state) : [];
+    const resumePlayback = removingCurrentTrack && state.isPlaying;
 
     playlist.items.splice(indexToRemove, 1);
     state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
 
-    if (removingCurrentTrack) {
-      resetCurrentTrack(true);
-    }
-
     renderList();
+
+    if (removingCurrentTrack) {
+      activateAdjacentTrackAfterRemoval(queueBeforeRemoval, {
+        clearGain: true,
+        resumePlayback,
+      });
+    }
   }
 
   function updatePlaylistsButtons() {
