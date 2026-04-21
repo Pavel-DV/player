@@ -78,7 +78,29 @@ export function getPlaylistItemOrder(state, playlistId = state.currentPlaylistId
   }
 
   if (!state.shuffle) {
-    return playlist.items;
+    return [...playlist.items].sort((leftKey, rightKey) => {
+      const leftIndex = state.fileIndexByKey.get(leftKey);
+      const rightIndex = state.fileIndexByKey.get(rightKey);
+      const leftKnown = typeof leftIndex === 'number';
+      const rightKnown = typeof rightIndex === 'number';
+
+      if (leftKnown && rightKnown) {
+        return leftIndex - rightIndex;
+      }
+
+      if (leftKnown) {
+        return -1;
+      }
+
+      if (rightKnown) {
+        return 1;
+      }
+
+      return leftKey.localeCompare(rightKey, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
   }
 
   const cachedOrder = state.shuffledPlaylistItemsById.get(playlist.id);
