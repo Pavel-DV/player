@@ -4,6 +4,7 @@ const PLAYLIST_STATES_KEY = 'playlistStates';
 const LEGACY_PLAYER_STATES_KEY = 'playerStates';
 const NORM_INFO_KEY = 'normInfo';
 const TRACK_START_INFO_KEY = 'trackStartInfo';
+const TRACK_GAIN_INFO_KEY = 'trackGainInfo';
 const EXPLICIT_INFO_KEY = 'explicitInfo';
 
 function readJson(key, fallback, errorLabel) {
@@ -190,6 +191,42 @@ export function saveTrackStartTime(trackKey, offset) {
   );
 }
 
+export function loadTrackGain(trackKey) {
+  const allTrackGainInfo = readJson(
+    TRACK_GAIN_INFO_KEY,
+    {},
+    'load track gain info'
+  );
+  const value = allTrackGainInfo?.[trackKey];
+
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export function saveTrackGain(trackKey, gain) {
+  if (!trackKey) {
+    return false;
+  }
+
+  const allTrackGainInfo = readJson(
+    TRACK_GAIN_INFO_KEY,
+    {},
+    'load track gain info for save'
+  );
+  const nextGain = Number.isFinite(gain) ? Math.max(0, gain) : null;
+
+  if (nextGain !== null) {
+    allTrackGainInfo[trackKey] = nextGain;
+  } else {
+    delete allTrackGainInfo[trackKey];
+  }
+
+  return writeJson(
+    TRACK_GAIN_INFO_KEY,
+    allTrackGainInfo,
+    'save track gain info'
+  );
+}
+
 export function loadExplicitInfo(trackKey) {
   const allExplicitInfo = readJson(EXPLICIT_INFO_KEY, {}, 'load explicit info');
   return Boolean(trackKey && allExplicitInfo?.[trackKey]);
@@ -219,6 +256,7 @@ export function clearPlayerCache() {
   try {
     localStorage.removeItem(NORM_INFO_KEY);
     localStorage.removeItem(TRACK_START_INFO_KEY);
+    localStorage.removeItem(TRACK_GAIN_INFO_KEY);
     localStorage.removeItem(PLAYLIST_STATES_KEY);
     localStorage.removeItem(LEGACY_PLAYER_STATES_KEY);
     return true;

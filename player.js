@@ -15,9 +15,11 @@ import {
   loadPlaylistState,
   loadPlaylists,
   loadSettings,
+  loadTrackGain,
   loadTrackStartTime,
   removePlaylistState,
   saveExplicitInfo,
+  saveTrackGain,
   saveNormInfo,
   savePlaylistState,
   savePlaylists,
@@ -37,7 +39,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '81';
+window.__playerBuildId = '97';
 console.log('Player build:', window.__playerBuildId);
 const { playlists, currentPlaylistId } = loadPlaylists();
 
@@ -217,6 +219,7 @@ playback = createPlaybackController({
   getDisplayName,
   getQueueIndices,
   loadNormInfo,
+  loadTrackGain,
   loadTrackStartTime,
   saveNormInfo,
   saveSettings,
@@ -227,9 +230,14 @@ trackRotation = createTrackRotationController({
   dom,
   state,
   getFileKey,
+  loadNormInfo,
+  loadTrackGain,
   loadTrackStartTime,
+  recalculateTrackStartOffset: trackKey => normalization.reanalyzeTrack(trackKey),
+  saveTrackGain,
   saveTrackStartTime,
   previewStartOffset: offset => playback?.previewStartOffset(offset),
+  previewTrackGain: options => playback?.applyVolumeForCurrentTrack(options),
 });
 
 library.bindFileInput();

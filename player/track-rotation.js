@@ -1,50 +1,34 @@
-const FULL_ROTATION_DEGREES = 360;
 const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
-const TIMING_SENSITIVITY = 0.1;
-const MAX_VISUAL_ROTATION_DEGREES = FULL_ROTATION_DEGREES / TIMING_SENSITIVITY;
+const DRAG_SECONDS_PER_PIXEL = 0.04;
+const DRAG_GAIN_PER_PIXEL = 0.01;
+const MAX_TRACK_GAIN = 4;
+const MIN_TRACK_GAIN = 0;
+const START_WHEEL_SHIFT_PIXELS_PER_SECOND = 24;
+const GAIN_WHEEL_SHIFT_PIXELS_PER_UNIT = 100;
 
 export function createTrackRotationController({
   dom,
   state,
   getFileKey,
+  loadNormInfo,
+  loadTrackGain,
   loadTrackStartTime,
+  recalculateTrackStartOffset,
+  saveTrackGain,
   saveTrackStartTime,
   previewStartOffset,
+  previewTrackGain,
 }) {
   const knobState = {
+    activeControl: null,
+    currentGain: 1,
+    currentStartOffset: 0,
     currentTrackKey: null,
+    dragStartValue: 0,
+    dragStartY: 0,
     isActive: false,
     pointerId: null,
-    prevPointerAngle: 0,
-    rotationDeg: 0,
   };
-
-  function clampRotationDeg(deg) {
-    return Math.max(0, Math.min(MAX_VISUAL_ROTATION_DEGREES, deg));
-  }
-
-  function shortestAngleDelta(fromDeg, toDeg) {
-    let delta = toDeg - fromDeg;
-
-    if (delta > 180) {
-      delta -= 360;
-    }
-
-    if (delta < -180) {
-      delta += 360;
-    }
-
-    return delta;
-  }
-
-  function pointerAngleDeg(element, clientX, clientY) {
-    const rect = element.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const angleRad = Math.atan2(clientY - centerY, clientX - centerX);
-
-    return (angleRad * 180) / Math.PI;
-  }
 
   function getCurrentTrackFile() {
     return state.files[state.index] ?? null;
@@ -58,37 +42,15 @@ export function createTrackRotationController({
   function getCurrentTrackDuration() {
     return Number.isFinite(dom.audioElement?.duration) && dom.audioElement.duration > 0
       ? dom.audioElement.duration
-      : 0;
+      : NaN;
   }
 
   function getMaxTrackStartOffset(duration) {
     if (!(Number.isFinite(duration) && duration > 0)) {
-      return 0;
+      return Infinity;
     }
 
     return Math.max(0, duration - START_OFFSET_END_TOLERANCE_SECONDS);
-  }
-
-  function startOffsetToRotationDeg(offset, duration) {
-    if (!(Number.isFinite(duration) && duration > 0)) {
-      return 0;
-    }
-
-    return clampRotationDeg(
-      (Math.max(0, Math.min(offset, getMaxTrackStartOffset(duration))) / duration) *
-        MAX_VISUAL_ROTATION_DEGREES
-    );
-  }
-
-  function rotationDegToStartOffset(rotationDeg, duration) {
-    if (!(Number.isFinite(duration) && duration > 0)) {
-      return 0;
-    }
-
-    return (
-      (clampRotationDeg(rotationDeg) / MAX_VISUAL_ROTATION_DEGREES) *
-      duration
-    );
   }
 
   function normalizeTrackStartOffset(offset, duration) {
@@ -96,7 +58,41 @@ export function createTrackRotationController({
       return 0;
     }
 
-    return Math.min(offset, getMaxTrackStartOffset(duration));
+    return Math.min(Math.max(0, offset), getMaxTrackStartOffset(duration));
+  }
+
+  function normalizeTrackGain(gain) {
+    if (!Number.isFinite(gain)) {
+      return 1;
+    }
+
+    return Math.min(MAX_TRACK_GAIN, Math.max(MIN_TRACK_GAIN, gain));
+  }
+
+  function getDerivedTrackGain(trackKey) {
+    const gainOverride = loadTrackGain(trackKey);
+
+    if (Number.isFinite(gainOverride) && gainOverride >= 0) {
+      return normalizeTrackGain(gainOverride);
+    }
+
+    const peak = loadNormInfo(trackKey);
+
+    if (typeof peak === 'number' && peak > 0) {
+      return normalizeTrackGain(Math.min(1 / peak, 10));
+    }
+
+    return 1;
+  }
+
+  function getDefaultTrackGain(trackKey) {
+    const peak = loadNormInfo(trackKey);
+
+    if (typeof peak === 'number' && peak > 0) {
+      return normalizeTrackGain(Math.min(1 / peak, 10));
+    }
+
+    return 1;
   }
 
   function formatStartOffset(offset) {
@@ -108,12 +104,35 @@ export function createTrackRotationController({
     return `${minutes}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
   }
 
+  function renderWheel() {
+    if (!dom.trackStartWheelEl) {
+      return;
+    }
+
+    let shift = 0;
+
+    if (knobState.activeControl === 'start') {
+      shift =
+        knobState.currentStartOffset * START_WHEEL_SHIFT_PIXELS_PER_SECOND;
+    } else if (knobState.activeControl === 'gain') {
+      shift = knobState.currentGain * GAIN_WHEEL_SHIFT_PIXELS_PER_UNIT;
+    }
+
+    dom.trackStartWheelEl.style.setProperty(
+      '--track-start-shift',
+      `${Number((-shift).toFixed(3))}px`
+    );
+  }
+
   function renderStartInfo(offset) {
     if (!dom.trackStartInfoEl) {
       return;
     }
 
-    if (!(Number.isFinite(offset) && offset > 0)) {
+    const shouldShow = knobState.activeControl === 'start';
+
+    if (!shouldShow) {
+      dom.trackStartInfoEl.classList.remove('active');
       dom.trackStartInfoEl.textContent = '';
       dom.trackStartInfoEl.style.display = 'none';
       return;
@@ -121,25 +140,130 @@ export function createTrackRotationController({
 
     dom.trackStartInfoEl.textContent = `Start: ${formatStartOffset(offset)}`;
     dom.trackStartInfoEl.style.display = 'block';
+    dom.trackStartInfoEl.classList.toggle(
+      'active',
+      knobState.activeControl === 'start'
+    );
+  }
+
+  function applyControlState() {
+    const isStartActive = knobState.activeControl === 'start';
+    const isGainActive = knobState.activeControl === 'gain';
+    const hasCustomGain = Math.abs(knobState.currentGain - 1) > 0.0005;
+
+    if (dom.trackAdjusterButtonsEl) {
+      dom.trackAdjusterButtonsEl.classList.toggle('start-mode', isStartActive);
+      dom.trackAdjusterButtonsEl.classList.toggle('gain-mode', isGainActive);
+    }
+
+    if (dom.trackStartToggleEl) {
+      const hasCustomStart = knobState.currentStartOffset > 0.0005;
+      dom.trackStartToggleEl.classList.toggle('on', isStartActive || hasCustomStart);
+      dom.trackStartToggleEl.setAttribute(
+        'aria-expanded',
+        isStartActive ? 'true' : 'false'
+      );
+    }
+
+    if (dom.trackStartDefaultBtnEl) {
+      dom.trackStartDefaultBtnEl.disabled = !knobState.currentTrackKey;
+      dom.trackStartDefaultBtnEl.classList.toggle(
+        'on',
+        isStartActive && knobState.currentStartOffset < 0.0005
+      );
+    }
+
+    if (dom.trackGainToggleEl) {
+      dom.trackGainToggleEl.classList.toggle('on', isGainActive || hasCustomGain);
+      dom.trackGainToggleEl.setAttribute(
+        'aria-expanded',
+        isGainActive ? 'true' : 'false'
+      );
+    }
+
+    if (dom.trackGainDefaultBtnEl) {
+      dom.trackGainDefaultBtnEl.disabled = !knobState.currentTrackKey;
+      dom.trackGainDefaultBtnEl.classList.toggle(
+        'on',
+        isGainActive && Math.abs(knobState.currentGain - getDefaultTrackGain(knobState.currentTrackKey)) < 0.0005
+      );
+    }
+
+    if (dom.trackGainUnityBtnEl) {
+      dom.trackGainUnityBtnEl.disabled = !knobState.currentTrackKey;
+      dom.trackGainUnityBtnEl.classList.toggle(
+        'on',
+        isGainActive && Math.abs(knobState.currentGain - 1) < 0.0005
+      );
+    }
+
+    if (dom.trackStartWheelEl) {
+      dom.trackStartWheelEl.classList.toggle(
+        'open',
+        Boolean(knobState.activeControl)
+      );
+      dom.trackStartWheelEl.setAttribute(
+        'aria-hidden',
+        knobState.activeControl ? 'false' : 'true'
+      );
+    }
+  }
+
+  function updateGainPreview() {
+    previewTrackGain?.({
+      forceVisible: knobState.activeControl === 'gain',
+    });
+  }
+
+  function setActiveControl(nextControl) {
+    knobState.activeControl =
+      nextControl && knobState.currentTrackKey ? nextControl : null;
+    applyControlState();
+    renderWheel();
+    renderStartInfo(knobState.currentStartOffset);
+    updateGainPreview();
   }
 
   function sync(force = false) {
-    if (!dom.trackArtworkEl) {
-      return;
+    const currentTrackKey = getCurrentTrackKey();
+
+    if (dom.trackArtworkEl) {
+      dom.trackArtworkEl.style.transform = '';
     }
 
-    const currentTrackKey = getCurrentTrackKey();
+    if (dom.trackStartToggleEl) {
+      dom.trackStartToggleEl.disabled = !currentTrackKey;
+    }
+
+    if (dom.trackGainToggleEl) {
+      dom.trackGainToggleEl.disabled = !currentTrackKey;
+    }
+
+    if (dom.trackGainDefaultBtnEl) {
+      dom.trackGainDefaultBtnEl.disabled = !currentTrackKey;
+    }
+
+    if (dom.trackGainUnityBtnEl) {
+      dom.trackGainUnityBtnEl.disabled = !currentTrackKey;
+    }
 
     if (!currentTrackKey) {
       knobState.currentTrackKey = null;
-      knobState.rotationDeg = 0;
-      dom.trackArtworkEl.style.transform = '';
+      knobState.currentStartOffset = 0;
+      knobState.currentGain = 1;
+      knobState.isActive = false;
+      knobState.pointerId = null;
+      setActiveControl(null);
+      renderWheel();
       renderStartInfo(0);
       return;
     }
 
-    const duration = getCurrentTrackDuration();
-    const savedStartOffset = loadTrackStartTime(currentTrackKey);
+    const savedStartOffset = normalizeTrackStartOffset(
+      loadTrackStartTime(currentTrackKey),
+      getCurrentTrackDuration()
+    );
+    const savedGain = getDerivedTrackGain(currentTrackKey);
 
     if (
       force ||
@@ -147,84 +271,146 @@ export function createTrackRotationController({
       knobState.currentTrackKey !== currentTrackKey
     ) {
       knobState.currentTrackKey = currentTrackKey;
-      knobState.rotationDeg = startOffsetToRotationDeg(
-        savedStartOffset,
-        duration
-      );
+      knobState.currentStartOffset = savedStartOffset;
+      knobState.currentGain = savedGain;
     }
 
-    dom.trackArtworkEl.style.transform = `rotate(${knobState.rotationDeg.toFixed(3)}deg)`;
-    renderStartInfo(savedStartOffset);
+    applyControlState();
+    renderWheel();
+    renderStartInfo(knobState.currentStartOffset);
+    updateGainPreview();
   }
 
   function bind() {
-    if (!dom.trackArtworkEl) {
+    if (
+      !dom.trackStartToggleEl ||
+      !dom.trackGainToggleEl ||
+      !dom.trackStartDefaultBtnEl ||
+      !dom.trackGainDefaultBtnEl ||
+      !dom.trackGainUnityBtnEl ||
+      !dom.trackStartWheelEl
+    ) {
       return;
     }
 
-    dom.trackArtworkEl.addEventListener('contextmenu', event => {
+    const toggleControl = control => event => {
       event.preventDefault();
+      sync(true);
+      setActiveControl(knobState.activeControl === control ? null : control);
+    };
+
+    dom.trackStartToggleEl.addEventListener('click', toggleControl('start'));
+    dom.trackGainToggleEl.addEventListener('click', toggleControl('gain'));
+
+    dom.trackStartDefaultBtnEl.addEventListener('click', async event => {
+      if (!knobState.currentTrackKey) {
+        return;
+      }
+
+      event.preventDefault();
+      const analysisResult = await recalculateTrackStartOffset?.(
+        knobState.currentTrackKey
+      );
+      knobState.currentStartOffset = normalizeTrackStartOffset(
+        analysisResult?.startOffset ?? 0,
+        getCurrentTrackDuration()
+      );
+      applyControlState();
+      renderWheel();
+      renderStartInfo(knobState.currentStartOffset);
+      previewStartOffset?.(knobState.currentStartOffset);
     });
 
-    dom.trackArtworkEl.addEventListener('dragstart', event => {
+    dom.trackGainDefaultBtnEl.addEventListener('click', event => {
+      if (!knobState.currentTrackKey) {
+        return;
+      }
+
       event.preventDefault();
+      knobState.currentGain = getDefaultTrackGain(knobState.currentTrackKey);
+      saveTrackGain(knobState.currentTrackKey, null);
+      applyControlState();
+      renderWheel();
+      updateGainPreview();
     });
 
-    dom.trackArtworkEl.addEventListener('pointerdown', event => {
-      const currentTrackKey = getCurrentTrackKey();
-      const duration = getCurrentTrackDuration();
+    dom.trackGainUnityBtnEl.addEventListener('click', event => {
+      if (!knobState.currentTrackKey) {
+        return;
+      }
 
-      if (!currentTrackKey || !(duration > 0)) {
+      event.preventDefault();
+      knobState.currentGain = 1;
+      saveTrackGain(knobState.currentTrackKey, 1);
+      applyControlState();
+      renderWheel();
+      updateGainPreview();
+    });
+
+    dom.trackStartWheelEl.addEventListener('pointerdown', event => {
+      if (!knobState.activeControl || !knobState.currentTrackKey) {
         return;
       }
 
       event.preventDefault();
       knobState.isActive = true;
       knobState.pointerId = event.pointerId;
-      knobState.prevPointerAngle = pointerAngleDeg(
-        dom.trackArtworkEl,
-        event.clientX,
-        event.clientY
-      );
-      knobState.currentTrackKey = currentTrackKey;
-      dom.trackArtworkEl.setPointerCapture(event.pointerId);
+      knobState.dragStartY = event.clientY;
+      knobState.dragStartValue =
+        knobState.activeControl === 'gain'
+          ? knobState.currentGain
+          : knobState.currentStartOffset;
+      dom.trackStartWheelEl.setPointerCapture(event.pointerId);
+      renderStartInfo(knobState.currentStartOffset);
+      updateGainPreview();
     });
 
-    dom.trackArtworkEl.addEventListener('pointermove', event => {
+    dom.trackStartWheelEl.addEventListener('pointermove', event => {
       if (!knobState.isActive || event.pointerId !== knobState.pointerId) {
         return;
       }
 
       event.preventDefault();
-      const duration = getCurrentTrackDuration();
+      const deltaY = event.clientY - knobState.dragStartY;
 
-      if (!(duration > 0)) {
+      if (knobState.activeControl === 'start') {
+        const nextOffset = Number(
+          normalizeTrackStartOffset(
+            knobState.dragStartValue - deltaY * DRAG_SECONDS_PER_PIXEL,
+            getCurrentTrackDuration()
+          ).toFixed(3)
+        );
+
+        if (nextOffset === knobState.currentStartOffset) {
+          return;
+        }
+
+        knobState.currentStartOffset = nextOffset;
+        saveTrackStartTime(knobState.currentTrackKey, nextOffset);
+        applyControlState();
+        renderWheel();
+        renderStartInfo(nextOffset);
+        previewStartOffset?.(nextOffset);
         return;
       }
 
-      const currentPointerAngle = pointerAngleDeg(
-        dom.trackArtworkEl,
-        event.clientX,
-        event.clientY
-      );
-      const delta = shortestAngleDelta(
-        knobState.prevPointerAngle,
-        currentPointerAngle
-      );
-      const nextRotationDeg = clampRotationDeg(knobState.rotationDeg + delta);
-      const nextStartOffset = Number(
-        normalizeTrackStartOffset(
-          rotationDegToStartOffset(nextRotationDeg, duration),
-          duration
-        ).toFixed(3)
-      );
+      if (knobState.activeControl === 'gain') {
+        const nextGain = Number(
+          normalizeTrackGain(
+            knobState.dragStartValue - deltaY * DRAG_GAIN_PER_PIXEL
+          ).toFixed(2)
+        );
 
-      knobState.prevPointerAngle = currentPointerAngle;
-      knobState.rotationDeg = nextRotationDeg;
-      dom.trackArtworkEl.style.transform = `rotate(${nextRotationDeg.toFixed(3)}deg)`;
-      saveTrackStartTime(knobState.currentTrackKey, nextStartOffset);
-      renderStartInfo(nextStartOffset);
-      previewStartOffset?.(nextStartOffset);
+        if (nextGain === knobState.currentGain) {
+          return;
+        }
+
+        knobState.currentGain = nextGain;
+        saveTrackGain(knobState.currentTrackKey, nextGain);
+        applyControlState();
+        renderWheel();
+        updateGainPreview();
+      }
     });
 
     const endDrag = event => {
@@ -237,8 +423,21 @@ export function createTrackRotationController({
       sync(true);
     };
 
-    dom.trackArtworkEl.addEventListener('pointerup', endDrag);
-    dom.trackArtworkEl.addEventListener('pointercancel', endDrag);
+    dom.trackStartWheelEl.addEventListener('pointerup', endDrag);
+    dom.trackStartWheelEl.addEventListener('pointercancel', endDrag);
+
+    document.addEventListener('pointerdown', event => {
+      if (
+        !knobState.activeControl ||
+        event.target.closest(
+          '#trackStartToggle, #trackGainToggle, #trackStartDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, #trackStartWheel'
+        )
+      ) {
+        return;
+      }
+
+      setActiveControl(null);
+    });
   }
 
   return {

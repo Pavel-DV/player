@@ -56,6 +56,7 @@ export function createUiController({
 
     if (dom.trackArtworkEl) {
       dom.trackArtworkEl.style.display = 'none';
+      dom.trackArtworkEl.style.transform = '';
       dom.trackArtworkEl.removeAttribute('src');
     }
 
@@ -66,6 +67,44 @@ export function createUiController({
     if (dom.trackStartInfoEl) {
       dom.trackStartInfoEl.textContent = '';
       dom.trackStartInfoEl.style.display = 'none';
+    }
+
+    if (dom.trackStartToggleEl) {
+      dom.trackStartToggleEl.disabled = true;
+      dom.trackStartToggleEl.classList.remove('on');
+      dom.trackStartToggleEl.setAttribute('aria-expanded', 'false');
+    }
+
+    if (dom.trackGainToggleEl) {
+      dom.trackGainToggleEl.disabled = true;
+      dom.trackGainToggleEl.classList.remove('on');
+      dom.trackGainToggleEl.setAttribute('aria-expanded', 'false');
+    }
+
+    if (dom.trackStartDefaultBtnEl) {
+      dom.trackStartDefaultBtnEl.disabled = true;
+      dom.trackStartDefaultBtnEl.classList.remove('on');
+    }
+
+    if (dom.trackGainDefaultBtnEl) {
+      dom.trackGainDefaultBtnEl.disabled = true;
+      dom.trackGainDefaultBtnEl.classList.remove('on');
+    }
+
+    if (dom.trackGainUnityBtnEl) {
+      dom.trackGainUnityBtnEl.disabled = true;
+      dom.trackGainUnityBtnEl.classList.remove('on');
+    }
+
+    if (dom.trackAdjusterButtonsEl) {
+      dom.trackAdjusterButtonsEl.classList.remove('start-mode');
+      dom.trackAdjusterButtonsEl.classList.remove('gain-mode');
+    }
+
+    if (dom.trackStartWheelEl) {
+      dom.trackStartWheelEl.classList.remove('open');
+      dom.trackStartWheelEl.setAttribute('aria-hidden', 'true');
+      dom.trackStartWheelEl.style.removeProperty('--track-start-shift');
     }
 
     if (dom.explicitTrackToggleEl) {
@@ -199,6 +238,7 @@ export function createUiController({
         dom.trackArtworkEl.style.display = 'block';
       } else {
         dom.trackArtworkEl.style.display = 'none';
+        dom.trackArtworkEl.style.transform = '';
         dom.trackArtworkEl.removeAttribute('src');
       }
     }

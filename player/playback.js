@@ -36,16 +36,14 @@ export function createPlaybackController({
   getDisplayName,
   getQueueIndices,
   loadNormInfo,
+  loadTrackGain,
   loadTrackStartTime,
   saveNormInfo,
   saveSettings,
   savePlayerState,
 }) {
   let lastTimeupdateTraceAt = 0;
-  let currentSourceIsNormalized = false;
   let currentSourceTrackKey = null;
-  let cachedNormalizedBlob = null;
-  let cachedNormalizedTrackKey = null;
   let hasLoggedPlaybackAudioSessionReady = false;
   let lastEndedHandlerSequenceId = null;
 
@@ -89,6 +87,89 @@ export function createPlaybackController({
     userAgent:
       typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
   });
+
+  function getDerivedTrackGain(trackKey) {
+    const gainOverride = loadTrackGain?.(trackKey);
+
+    if (Number.isFinite(gainOverride) && gainOverride >= 0) {
+      return Math.max(0, gainOverride);
+    }
+
+    const peak = loadNormInfo(trackKey);
+
+    if (typeof peak === 'number' && peak > 0) {
+      return Math.min(1 / peak, 10);
+    }
+
+    return 1;
+  }
+
+  function ensureAudioGraph(reason = 'unknown') {
+    if (!dom.audioElement) {
+      return false;
+    }
+
+    if (state.audioContext && state.gainNode && state.audioSourceNode) {
+      return true;
+    }
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+    if (!AudioContextClass) {
+      tracePlayback('audio.graph.unavailable', { reason });
+      return false;
+    }
+
+    try {
+      if (!state.audioContext) {
+        state.audioContext = new AudioContextClass();
+      }
+
+      if (!state.audioSourceNode) {
+        state.audioSourceNode = state.audioContext.createMediaElementSource(
+          dom.audioElement
+        );
+      }
+
+      if (!state.gainNode) {
+        state.gainNode = state.audioContext.createGain();
+      }
+
+      state.audioSourceNode.connect(state.gainNode);
+      state.gainNode.connect(state.audioContext.destination);
+      tracePlayback('audio.graph.ready', { reason });
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize audio graph:', error);
+      tracePlayback('audio.graph.failed', {
+        error: summarizeError(error),
+        reason,
+      });
+      return false;
+    }
+  }
+
+  function resumeAudioGraph(reason = 'unknown') {
+    if (!ensureAudioGraph(reason) || !state.audioContext) {
+      return;
+    }
+
+    if (state.audioContext.state === 'running') {
+      return;
+    }
+
+    void state.audioContext.resume().then(() => {
+      tracePlayback('audio.graph.resumed', {
+        reason,
+        state: state.audioContext?.state ?? null,
+      });
+    }).catch(error => {
+      tracePlayback('audio.graph.resume.failed', {
+        error: summarizeError(error),
+        reason,
+      });
+    });
+  }
 
   function ensurePlaybackAudioSession(reason = 'unknown') {
     if (!('audioSession' in navigator) || !navigator.audioSession) {
@@ -556,186 +637,43 @@ export function createPlaybackController({
     };
   }
 
-  async function rewriteMp3GlobalGain(file, multiplier) {
-    const trackKey = getFileKey(file);
-    const gainStepDelta = Math.round(Math.log2(multiplier) * 4);
-
-    if (!Number.isFinite(gainStepDelta) || gainStepDelta === 0) {
-      return {
-        changedFrameCount: 0,
-        source: file,
-      };
-    }
-
-    const sourceBytes = new Uint8Array(await file.arrayBuffer());
-    const outputBytes = new Uint8Array(sourceBytes);
-    const frameSearchStartOffset = getId3TagSize(outputBytes);
-    let frameOffset = frameSearchStartOffset;
-    let changedFrameCount = 0;
-    let parsedFrameCount = 0;
-
-    while (frameOffset + 4 <= outputBytes.length) {
-      if (
-        outputBytes.length - frameOffset === 128 &&
-        outputBytes[frameOffset] === 0x54 &&
-        outputBytes[frameOffset + 1] === 0x41 &&
-        outputBytes[frameOffset + 2] === 0x47
-      ) {
-        break;
-      }
-
-      const frameHeader = parseMp3FrameHeader(outputBytes, frameOffset);
-
-      if (!frameHeader) {
-        if (parsedFrameCount === 0) {
-          console.warn(`Failed to parse the first MP3 frame for "${trackKey}"`);
-          return {
-            changedFrameCount: 0,
-            source: file,
-          };
-        }
-
-        if (outputBytes.length - frameOffset > 16) {
-          console.warn(`Stopped MP3 gain rewrite early for "${trackKey}" at ${frameOffset}`);
-        } else {
-          tracePlayback('audio.source.mp3.global-gain.trailing-bytes', {
-            remainingBytes: outputBytes.length - frameOffset,
-            trackKey,
-          });
-        }
-
-        break;
-      }
-
-      parsedFrameCount += 1;
-
-      for (let granuleIndex = 0; granuleIndex < frameHeader.granules; granuleIndex += 1) {
-        for (let channelIndex = 0; channelIndex < frameHeader.channels; channelIndex += 1) {
-          const channelBitOffset =
-            frameHeader.channelInfoStartBitOffset +
-            (granuleIndex * frameHeader.channels + channelIndex) *
-              frameHeader.channelInfoBitLength;
-          const globalGainBitOffset = channelBitOffset + 21;
-          const currentGlobalGain = getBits(
-            outputBytes,
-            frameHeader.sideInfoByteOffset,
-            globalGainBitOffset,
-            8
-          );
-          const nextGlobalGain = Math.max(
-            0,
-            Math.min(255, currentGlobalGain + gainStepDelta)
-          );
-
-          if (nextGlobalGain !== currentGlobalGain) {
-            setBits(
-              outputBytes,
-              frameHeader.sideInfoByteOffset,
-              globalGainBitOffset,
-              8,
-              nextGlobalGain
-            );
-            changedFrameCount += 1;
-          }
-        }
-      }
-
-      frameOffset += frameHeader.frameLength;
-    }
-
-    if (parsedFrameCount === 0 || changedFrameCount === 0) {
-      return {
-        changedFrameCount,
-        source: file,
-      };
-    }
-
-    tracePlayback('audio.source.mp3.global-gain.rewritten', {
-      changedFrameCount,
-      gainStepDelta,
-      trackKey,
-    });
-
-    return {
-      changedFrameCount,
-      source: setFileKey(
-        new Blob([outputBytes], { type: file.type || 'audio/mpeg' }),
-        trackKey
-      ),
-    };
-  }
-
   async function buildPreparedSource(file) {
     const trackKey = getFileKey(file);
 
-    if (!state.normalize || !/\.mp3$/i.test(trackKey)) {
-      return {
-        isNormalized: false,
-        source: file,
-      };
-    }
+    if (state.normalize) {
+      let peak = loadNormInfo(trackKey);
 
-    if (cachedNormalizedBlob && cachedNormalizedTrackKey === trackKey) {
-      return {
-        isNormalized: true,
-        source: cachedNormalizedBlob,
-      };
-    }
+      if (!(typeof peak === 'number' && peak > 0)) {
+        const DecodeAudioContext = window.AudioContext || window.webkitAudioContext;
+        const decodeAudioContext = new DecodeAudioContext();
+        let audioBuffer = null;
 
-    let peak = loadNormInfo(trackKey);
-
-    if (!(typeof peak === 'number' && peak > 0)) {
-      const DecodeAudioContext = window.AudioContext || window.webkitAudioContext;
-      const decodeAudioContext = new DecodeAudioContext();
-      let audioBuffer = null;
-
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        audioBuffer = await new Promise((resolve, reject) =>
-          decodeAudioContext.decodeAudioData(arrayBuffer, resolve, reject)
-        );
-      } finally {
         try {
-          await decodeAudioContext.close();
-        } catch (error) {
-          tracePlayback('audioContext.decode.close.failed', {
-            error: summarizeError(error),
-          });
+          const arrayBuffer = await file.arrayBuffer();
+          audioBuffer = await new Promise((resolve, reject) =>
+            decodeAudioContext.decodeAudioData(arrayBuffer, resolve, reject)
+          );
+        } finally {
+          try {
+            await decodeAudioContext.close();
+          } catch (error) {
+            tracePlayback('audioContext.decode.close.failed', {
+              error: summarizeError(error),
+            });
+          }
+        }
+
+        peak = analyzePeak(audioBuffer);
+
+        if (typeof peak === 'number' && peak > 0) {
+          saveNormInfo?.(trackKey, peak);
         }
       }
-
-      peak = analyzePeak(audioBuffer);
-
-      if (typeof peak === 'number' && peak > 0) {
-        saveNormInfo?.(trackKey, peak);
-      }
     }
-
-    const multiplier =
-      typeof peak === 'number' && peak > 0 ? Math.min(1 / peak, 10) : 1;
-
-    if (!(multiplier > 1.001)) {
-      return {
-        isNormalized: false,
-        source: file,
-      };
-    }
-
-    const { changedFrameCount, source } = await rewriteMp3GlobalGain(file, multiplier);
-
-    if (changedFrameCount === 0) {
-      return {
-        isNormalized: false,
-        source: file,
-      };
-    }
-
-    cachedNormalizedBlob = source;
-    cachedNormalizedTrackKey = trackKey;
 
     return {
-      isNormalized: true,
-      source,
+      isNormalized: false,
+      source: file,
     };
   }
 
@@ -772,7 +710,6 @@ export function createPlaybackController({
       state.currentObjectUrl = null;
     }
 
-    currentSourceIsNormalized = false;
     currentSourceTrackKey = null;
   }
 
@@ -899,10 +836,7 @@ export function createPlaybackController({
     }, 250);
   }
 
-  function setAudioSource(
-    file,
-    { isNormalizedSource = false, markInternalTransition = true } = {}
-  ) {
+  function setAudioSource(file, { markInternalTransition = true } = {}) {
     if (!dom.audioElement) {
       return;
     }
@@ -914,11 +848,9 @@ export function createPlaybackController({
     const previousObjectUrl = state.currentObjectUrl;
     state.currentObjectUrl = URL.createObjectURL(file);
     dom.audioElement.src = state.currentObjectUrl;
-    currentSourceIsNormalized = isNormalizedSource;
     currentSourceTrackKey = getFileKey(file);
     tracePlayback('audio.source.set', {
       hadPreviousObjectUrl: Boolean(previousObjectUrl),
-      isNormalizedSource,
       markInternalTransition,
       trackKey: getFileKey(file),
     });
@@ -953,11 +885,10 @@ export function createPlaybackController({
     }
 
     return buildPreparedSource(file)
-      .then(({ isNormalized, source }) => {
-        setAudioSource(source, { isNormalizedSource: isNormalized });
+      .then(({ source }) => {
+        setAudioSource(source);
         state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
         tracePlayback('audio.source.reload.success', {
-          isNormalizedSource: isNormalized,
           pendingStartOffset: state.pendingStartOffset,
           reason,
           resumePlayback,
@@ -1023,29 +954,23 @@ export function createPlaybackController({
     const hasMatchingExistingSource =
       hasExistingSource &&
       state.currentObjectUrl &&
-      currentSourceTrackKey === getFileKey(file) &&
-      currentSourceIsNormalized === state.normalize;
+      currentSourceTrackKey === getFileKey(file);
 
     if (hasMatchingExistingSource) {
       tracePlayback('audio.source.prime.skipped', {
         reason: 'existing-source',
-        isNormalizedSource: currentSourceIsNormalized,
         trackKey: getFileKey(file),
       });
       return Promise.resolve(true);
     }
 
     return buildPreparedSource(file)
-      .then(({ isNormalized, source }) => {
-        setAudioSource(source, {
-          isNormalizedSource: isNormalized,
-          markInternalTransition: false,
-        });
+      .then(({ source }) => {
+        setAudioSource(source, { markInternalTransition: false });
         state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
         dom.audioElement.load();
         state.isInternalTransition = false;
         tracePlayback('audio.source.prime.success', {
-          isNormalizedSource: isNormalized,
           pendingStartOffset: state.pendingStartOffset,
           trackKey: getFileKey(file),
         });
@@ -1114,40 +1039,39 @@ export function createPlaybackController({
     tracePlayback('playback.kill.end');
   }
 
-  function applyVolumeForCurrentTrack() {
+  function applyVolumeForCurrentTrack({ forceVisible = false } = {}) {
     const file = state.files[state.index];
 
     if (!file) {
+      if (state.gainNode) {
+        state.gainNode.gain.value = 1;
+      }
+
       if (dom.gainInfoEl) {
+        dom.gainInfoEl.classList.remove('active');
         dom.gainInfoEl.textContent = '';
       }
       return;
     }
 
     const trackKey = getFileKey(file);
+    const normalizedGain = getDerivedTrackGain(trackKey);
+    let effectiveMultiplier = 1;
 
-    if (!state.normalize) {
-      if (dom.gainInfoEl) {
-        dom.gainInfoEl.textContent = '';
-      }
-
-      return;
+    if (state.normalize) {
+      effectiveMultiplier = normalizedGain;
     }
 
-    const peak = loadNormInfo(trackKey);
-
-    if (typeof peak === 'number' && peak > 0) {
-      const multiplier = Math.min(1 / peak, 10);
-
-      if (dom.gainInfoEl) {
-        dom.gainInfoEl.textContent = `Gain: ${multiplier.toFixed(2)}x`;
-      }
-
-      return;
+    if (ensureAudioGraph('applyVolumeForCurrentTrack') && state.gainNode) {
+      state.gainNode.gain.value = effectiveMultiplier;
     }
 
     if (dom.gainInfoEl) {
-      dom.gainInfoEl.textContent = '';
+      const shouldShowGain = forceVisible;
+      dom.gainInfoEl.classList.toggle('active', forceVisible);
+      dom.gainInfoEl.textContent = shouldShowGain
+        ? `Gain: ${normalizedGain.toFixed(2)}x`
+        : '';
     }
   }
 
@@ -1161,6 +1085,7 @@ export function createPlaybackController({
     }
 
     ensurePlaybackAudioSession('playback.play');
+    resumeAudioGraph('playback.play');
     // Keep this on each play path; one-time setup caused lock-screen track buttons to disappear.
     setupMediaSessionHandlers();
 
@@ -1209,13 +1134,11 @@ export function createPlaybackController({
       hasBlobSource &&
       dom.audioElement.paused &&
       !dom.audioElement.ended &&
-      currentSourceTrackKey === getFileKey(file) &&
-      (!state.normalize || currentSourceIsNormalized);
+      currentSourceTrackKey === getFileKey(file);
 
     if (canResumeExistingSource) {
       tracePlayback('playback.play.resume-existing-source', {
         hasBlobSource,
-        isNormalizedSource: currentSourceIsNormalized,
       });
       bindEndedHandler(state.playSequence, 'playback.play.resume-existing-source');
       try {
@@ -1237,7 +1160,7 @@ export function createPlaybackController({
 
     const sequenceId = ++state.playSequence;
     void buildPreparedSource(file)
-      .then(({ isNormalized, source }) => {
+      .then(({ source }) => {
         if (sequenceId !== state.playSequence || !dom.audioElement) {
           tracePlayback('playback.play.new-source.skipped', {
             reason: 'sequence-mismatch',
@@ -1248,10 +1171,9 @@ export function createPlaybackController({
           return;
         }
 
-        setAudioSource(source, { isNormalizedSource: isNormalized });
+        setAudioSource(source);
         state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
         tracePlayback('playback.play.new-source', {
-          isNormalizedSource: isNormalized,
           pendingStartOffset: state.pendingStartOffset,
           sequenceId,
           trackKey: getFileKey(file),
@@ -1592,13 +1514,6 @@ export function createPlaybackController({
       normalize: state.normalize,
       allowExplicit: state.allowExplicit,
     });
-
-    if (dom.audioElement?.src) {
-      void reloadCurrentTrackSource({
-        reason: 'toggleNormalize',
-        resumePlayback: state.isPlaying,
-      });
-    }
   }
 
   function setAllowExplicit(enabled) {
@@ -1629,6 +1544,7 @@ export function createPlaybackController({
 
       if (hasPlayableSource) {
         ensurePlaybackAudioSession('audio.event.play.active-source');
+        resumeAudioGraph('audio.event.play.active-source');
         applyVolumeForCurrentTrack();
         // Re-register on the media element's play event so iPhone Safari keeps lock-screen controls.
         setupMediaSessionHandlers();

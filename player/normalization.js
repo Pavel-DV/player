@@ -183,7 +183,45 @@ export function createNormalizationService({
     void processAnalysisQueue();
   }
 
+  async function reanalyzeTrack(trackKey) {
+    if (!trackKey) {
+      return null;
+    }
+
+    const file = lookupFileByKey(trackKey);
+
+    if (!file) {
+      console.warn(`Skipping normalization reanalysis for missing file "${trackKey}"`);
+      return null;
+    }
+
+    const analysisResult = await analyzeTrackWithWebAudio(file);
+
+    if (typeof analysisResult?.peak === 'number' && analysisResult.peak > 0) {
+      saveNormInfo(trackKey, analysisResult.peak);
+    }
+
+    const nextStartOffset =
+      Number.isFinite(analysisResult?.startOffset) &&
+      analysisResult.startOffset >= MIN_AUTO_START_OFFSET_SECONDS
+        ? analysisResult.startOffset
+        : 0;
+
+    saveTrackStartTime(trackKey, nextStartOffset);
+    onTrackAnalyzed?.(
+      trackKey,
+      analysisResult?.peak ?? null,
+      nextStartOffset
+    );
+
+    return {
+      peak: analysisResult?.peak ?? null,
+      startOffset: nextStartOffset,
+    };
+  }
+
   return {
     queueTracksForAnalysis,
+    reanalyzeTrack,
   };
 }

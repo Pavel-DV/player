@@ -50,7 +50,11 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
     state.touchStartY = touch.clientY;
     state.touchActive = true;
 
-    if (event.target.closest('#audioElement, #trackArtwork')) {
+    if (
+      event.target.closest(
+        '#audioElement, #trackArtwork, #trackStartToggle, #trackGainToggle, #trackStartDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, #trackStartWheel'
+      )
+    ) {
       state.touchActive = false;
       return;
     }
