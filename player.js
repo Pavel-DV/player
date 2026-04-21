@@ -39,8 +39,13 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '99';
+window.__playerBuildId = '100';
 console.log('Player build:', window.__playerBuildId);
+const buildVersionEl = document.getElementById('buildVersion');
+
+if (buildVersionEl) {
+  buildVersionEl.textContent = `Build ${window.__playerBuildId}`;
+}
 const { playlists, currentPlaylistId } = loadPlaylists();
 
 state.playlists = playlists;
