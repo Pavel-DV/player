@@ -39,7 +39,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '100';
+window.__playerBuildId = '103';
 console.log('Player build:', window.__playerBuildId);
 const buildVersionEl = document.getElementById('buildVersion');
 
@@ -363,7 +363,9 @@ window.player = {
 };
 
 navigation.setScreen(1);
-void library.restorePersistedLibrary();
+void library.restorePersistedLibrary().then(hasPersistedLibrary => {
+  navigation.setScreen(hasPersistedLibrary ? 2 : 1);
+});
 
 window.addEventListener('beforeunload', () => {
   if (state.isPlaying && dom.audioElement) {
