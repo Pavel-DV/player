@@ -45,6 +45,26 @@ export function createLibraryController({
     state.opfsPendingTrackKeys.clear();
   }
 
+  function markTracksPending(files) {
+    files.forEach(file => {
+      const key = getFileKey(file);
+
+      if (key) {
+        state.opfsPendingTrackKeys.add(key);
+        state.opfsPersistedTrackKeys.delete(key);
+      }
+    });
+  }
+
+  function hasSameFileKeys(leftFiles, rightFiles) {
+    if (!Array.isArray(leftFiles) || leftFiles.length !== rightFiles.length) {
+      return false;
+    }
+
+    const rightKeys = new Set(rightFiles.map(file => getFileKey(file)));
+    return leftFiles.every(file => rightKeys.has(getFileKey(file)));
+  }
+
   function removeTrackKeyFromPlaylists(trackKey) {
     let changed = false;
 
@@ -158,9 +178,10 @@ export function createLibraryController({
 
       const saveSequence = state.opfsSaveSequence + 1;
       const nextFiles = prependFilesToLibrary(selectedFiles);
+      const selectedKeys = selectedFiles.map(file => getFileKey(file));
 
       state.opfsSaveSequence = saveSequence;
-      markLibraryPending(selectedFiles);
+      markTracksPending(selectedFiles);
       rebuildLibrary(nextFiles);
       void persistLibrary?.(nextFiles, {
         onFileSaved: key => {
@@ -175,21 +196,38 @@ export function createLibraryController({
           state.opfsPendingTrackKeys.delete(key);
           state.opfsPersistedTrackKeys.add(key);
           renderList();
+          void highlight();
         },
+        writeKeys: selectedKeys,
       })
         .then(saved => {
           if (!saved || saveSequence !== state.opfsSaveSequence) {
+            return false;
+          }
+
+          return loadPersistedLibrary?.();
+        })
+        .then(persistedFiles => {
+          if (!persistedFiles || saveSequence !== state.opfsSaveSequence) {
+            return;
+          }
+
+          if (hasSameFileKeys(persistedFiles, nextFiles)) {
+            markLibraryPersisted(persistedFiles);
+            rebuildLibrary(persistedFiles);
             return;
           }
 
           markLibraryPersisted(state.files);
           renderList();
+          void highlight();
         })
         .catch(error => {
           console.error('Failed to persist library to OPFS:', error);
 
           if (saveSequence === state.opfsSaveSequence) {
             renderList();
+            void highlight();
           }
         });
     });
@@ -220,6 +258,10 @@ export function createLibraryController({
     const trackKey = getFileKey(file);
     const nextFiles = state.files.filter((_, index) => index !== trackIndex);
     const saveSequence = state.opfsSaveSequence + 1;
+    const wasPersisted = state.opfsPersistedTrackKeys.has(trackKey);
+    const remainingFilesPersisted = nextFiles.every(nextFile =>
+      state.opfsPersistedTrackKeys.has(getFileKey(nextFile))
+    );
 
     state.opfsSaveSequence = saveSequence;
 
@@ -228,8 +270,34 @@ export function createLibraryController({
     state.explicitTrackKeys.delete(trackKey);
     removeTrackKeyFromPlaylists(trackKey);
     renderPlaylists?.();
-    markLibraryPending(nextFiles);
     rebuildLibrary(nextFiles);
+
+    if (wasPersisted && remainingFilesPersisted && deletePersistedTrack) {
+      try {
+        await deletePersistedTrack(trackKey);
+
+        if (saveSequence !== state.opfsSaveSequence) {
+          return true;
+        }
+
+        const persistedFiles = await loadPersistedLibrary?.();
+
+        if (
+          Array.isArray(persistedFiles) &&
+          persistedFiles.length === nextFiles.length
+        ) {
+          markLibraryPersisted(persistedFiles);
+          rebuildLibrary(persistedFiles);
+        }
+
+        return true;
+      } catch (error) {
+        console.error('Failed to delete library track from OPFS:', error);
+        return false;
+      }
+    }
+
+    markLibraryPending(nextFiles);
 
     try {
       await persistLibrary?.(nextFiles, {
@@ -245,6 +313,7 @@ export function createLibraryController({
           state.opfsPendingTrackKeys.delete(key);
           state.opfsPersistedTrackKeys.add(key);
           renderList();
+          void highlight();
         },
       });
 
@@ -254,6 +323,7 @@ export function createLibraryController({
 
       markLibraryPersisted(state.files);
       renderList();
+      void highlight();
       return true;
     } catch (error) {
       console.error('Failed to persist library after track deletion:', error);

@@ -442,6 +442,8 @@ export function createUiController({
         clearGain: true,
         resumePlayback,
       });
+    } else {
+      void highlight();
     }
   }
 

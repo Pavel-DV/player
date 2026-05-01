@@ -162,11 +162,13 @@ self.onmessage = async event => {
       }
 
       await writeManifest(
-        files.map(entry => ({
-          key: entry.key,
-          lastModified: entry.lastModified,
-          type: entry.type,
-        }))
+        manifestEntries.length > 0
+          ? manifestEntries
+          : files.map(entry => ({
+              key: entry.key,
+              lastModified: entry.lastModified,
+              type: entry.type,
+            }))
       );
 
       for (const staleKey of staleKeys) {

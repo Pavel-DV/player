@@ -47,7 +47,10 @@ function getOpfsWorker() {
     return opfsWorker;
   }
 
-  opfsWorker = new Worker(new URL('./opfs-worker.js', import.meta.url), {
+  const workerUrl = new URL('./opfs-worker.js', import.meta.url);
+  workerUrl.searchParams.set('build', window.__playerBuildId ?? 'dev');
+
+  opfsWorker = new Worker(workerUrl, {
     type: 'module',
   });
 
@@ -239,7 +242,11 @@ export function isOpfsLibrarySupported() {
   );
 }
 
-export async function saveLibraryToOpfs(files, getFileKey, { onFileSaved } = {}) {
+export async function saveLibraryToOpfs(
+  files,
+  getFileKey,
+  { onFileSaved, writeKeys = null } = {}
+) {
   if (!isOpfsLibrarySupported()) {
     return false;
   }
@@ -262,6 +269,10 @@ export async function saveLibraryToOpfs(files, getFileKey, { onFileSaved } = {})
     });
 
     const nextKeys = new Set(manifestEntries.map(entry => entry.key));
+    const keysToWrite = writeKeys ? new Set(writeKeys) : null;
+    const entriesToWrite = keysToWrite
+      ? manifestEntries.filter(entry => keysToWrite.has(entry.key))
+      : manifestEntries;
     const worker = getOpfsWorker();
     const requestId = ++opfsWorkerRequestId;
 
@@ -273,7 +284,12 @@ export async function saveLibraryToOpfs(files, getFileKey, { onFileSaved } = {})
       });
 
       worker.postMessage({
-        files: manifestEntries,
+        files: entriesToWrite,
+        manifestEntries: manifestEntries.map(entry => ({
+          key: entry.key,
+          lastModified: entry.lastModified,
+          type: entry.type,
+        })),
         requestId,
         staleKeys: (previousManifest?.files ?? [])
           .map(entry => entry.key)
@@ -342,6 +358,7 @@ export async function loadLibraryFromOpfs() {
     }
 
     const files = [];
+    const loadedKeys = new Set();
 
     for (const entry of manifest.files) {
       const fileHandle = await getFileHandleByKey(
@@ -357,6 +374,22 @@ export async function loadLibraryFromOpfs() {
 
       const storedFile = await fileHandle.getFile();
       files.push(setFileKey(createPlayableFile(storedFile, entry), entry.key));
+      loadedKeys.add(entry.key);
+    }
+
+    const legacyFiles = await collectLegacyFiles(libraryDirectoryHandle);
+    const missingManifestFiles = legacyFiles.filter(
+      file => !loadedKeys.has(getFileKey(file))
+    );
+
+    if (missingManifestFiles.length > 0) {
+      files.push(...missingManifestFiles);
+
+      try {
+        await saveLibraryToOpfs(files, getFileKey, { writeKeys: [] });
+      } catch (error) {
+        console.error('Failed to repair OPFS library manifest:', error);
+      }
     }
 
     return files;
