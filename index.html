@@ -59,6 +59,7 @@ body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:
 #trackArtwork{width:140px;height:140px;border-radius:8px;display:none;transform-origin:center;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 #trackStartAdjuster{display:flex;align-items:flex-start;gap:10px;min-height:140px}
 #trackAdjusterButtons{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+#trackTrimButtons{display:flex;align-items:center;gap:10px}
 #trackAdjusterButtons.start-mode #trackStartToggle{display:none}
 #trackAdjusterButtons.start-mode #trackEndToggle{display:none}
 #trackAdjusterButtons.start-mode #explicitTrackToggle{display:none}
@@ -137,8 +138,10 @@ rgba(255,255,255,.36) 23px 25px
             <img id=trackArtwork draggable="false">
             <div id=trackStartAdjuster>
                 <div id=trackAdjusterButtons>
-                    <button id=trackStartToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Adjust track start time"><span class=dim>]</span><span>[</span></button>
-                    <button id=trackEndToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Adjust track end time"><span>]</span><span class=dim>[</span></button>
+                    <div id=trackTrimButtons>
+                        <button id=trackStartToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Adjust track start time"><span class=dim>]</span><span>[</span></button>
+                        <button id=trackEndToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Adjust track end time"><span>]</span><span class=dim>[</span></button>
+                    </div>
                     <button id=trackGainToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Adjust track gain">&#x266A;</button>
                     <button id=explicitTrackToggle type=button aria-label="Toggle explicit for current track" aria-pressed="false">E</button>
                     <button id=trackRepeatToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Edit repeat count for current track" aria-pressed="false">&#x21BA;</button>

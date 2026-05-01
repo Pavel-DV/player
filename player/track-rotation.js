@@ -221,12 +221,13 @@ export function createTrackRotationController({
       return;
     }
 
-    dom.trackStartInfoEl.textContent =
-      knobState.activeControl === 'repeat'
-        ? `Repeat: ${knobState.currentRepeatCount}`
-        : knobState.activeControl === 'end'
-          ? `End: ${formatStartOffset(getEffectiveTrackEndTime())}`
-        : `Start: ${formatStartOffset(offset)}`;
+    if (knobState.activeControl === 'repeat') {
+      dom.trackStartInfoEl.textContent = `Repeat: ${knobState.currentRepeatCount}`;
+    } else if (knobState.activeControl === 'end') {
+      dom.trackStartInfoEl.textContent = `End: ${formatStartOffset(getEffectiveTrackEndTime())}`;
+    } else {
+      dom.trackStartInfoEl.textContent = `Start: ${formatStartOffset(offset)}`;
+    }
     dom.trackStartInfoEl.style.display = 'block';
     dom.trackStartInfoEl.classList.toggle(
       'active',
