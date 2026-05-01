@@ -140,13 +140,26 @@ export function createLibraryController({
       .map(file => setFileKey(file, file.webkitRelativePath || file.name));
   }
 
-  function prependFilesToLibrary(selectedFiles) {
-    const selectedKeys = new Set(selectedFiles.map(file => getFileKey(file)));
+  function getNewInputFiles(selectedFiles) {
+    const knownKeys = new Set(state.files.map(file => getFileKey(file)));
+    const newFiles = [];
 
-    return [
-      ...selectedFiles,
-      ...state.files.filter(file => !selectedKeys.has(getFileKey(file))),
-    ];
+    selectedFiles.forEach(file => {
+      const key = getFileKey(file);
+
+      if (!key || knownKeys.has(key)) {
+        return;
+      }
+
+      knownKeys.add(key);
+      newFiles.push(file);
+    });
+
+    return newFiles;
+  }
+
+  function prependFilesToLibrary(newFiles) {
+    return [...newFiles, ...state.files];
   }
 
   function pickMusicDirectory() {
@@ -167,12 +180,18 @@ export function createLibraryController({
         return;
       }
 
+      const newFiles = getNewInputFiles(selectedFiles);
+
+      if (newFiles.length === 0) {
+        return;
+      }
+
       const saveSequence = state.opfsSaveSequence + 1;
-      const nextFiles = prependFilesToLibrary(selectedFiles);
-      const selectedKeys = selectedFiles.map(file => getFileKey(file));
+      const nextFiles = prependFilesToLibrary(newFiles);
+      const newKeys = newFiles.map(file => getFileKey(file));
 
       state.opfsSaveSequence = saveSequence;
-      markTracksPending(selectedFiles);
+      markTracksPending(newFiles);
       rebuildLibrary(nextFiles);
       void persistLibrary?.(nextFiles, {
         onFileSaved: key => {
@@ -189,7 +208,7 @@ export function createLibraryController({
           renderList();
           void highlight();
         },
-        writeKeys: selectedKeys,
+        writeKeys: newKeys,
       })
         .then(saved => {
           if (!saved || saveSequence !== state.opfsSaveSequence) {
