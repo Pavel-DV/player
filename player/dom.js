@@ -11,6 +11,7 @@ export function getPlayerDom() {
     trackEndToggleEl: document.getElementById('trackEndToggle'),
     trackGainToggleEl: document.getElementById('trackGainToggle'),
     trackStartDefaultBtnEl: document.getElementById('trackStartDefaultBtn'),
+    trackEndDefaultBtnEl: document.getElementById('trackEndDefaultBtn'),
     trackGainDefaultBtnEl: document.getElementById('trackGainDefaultBtn'),
     trackGainUnityBtnEl: document.getElementById('trackGainUnityBtn'),
     trackStartWheelEl: document.getElementById('trackStartWheel'),

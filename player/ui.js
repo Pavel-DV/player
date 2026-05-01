@@ -93,6 +93,11 @@ export function createUiController({
       dom.trackStartDefaultBtnEl.classList.remove('on');
     }
 
+    if (dom.trackEndDefaultBtnEl) {
+      dom.trackEndDefaultBtnEl.disabled = true;
+      dom.trackEndDefaultBtnEl.classList.remove('on');
+    }
+
     if (dom.trackGainDefaultBtnEl) {
       dom.trackGainDefaultBtnEl.disabled = true;
       dom.trackGainDefaultBtnEl.classList.remove('on');

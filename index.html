@@ -71,6 +71,7 @@ body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:
 #trackAdjusterButtons.end-mode #trackGainToggle{display:none}
 #trackAdjusterButtons.end-mode #trackRepeatToggle{display:none}
 #trackAdjusterButtons.end-mode #explicitTrackToggle{display:none}
+#trackAdjusterButtons.end-mode #trackEndDefaultBtn{display:inline-flex}
 #trackAdjusterButtons.gain-mode #trackGainToggle{display:none}
 #trackAdjusterButtons.gain-mode #trackStartToggle{display:none}
 #trackAdjusterButtons.gain-mode #trackEndToggle{display:none}
@@ -82,16 +83,16 @@ body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:
 #trackAdjusterButtons.repeat-mode #trackEndToggle{display:none}
 #trackAdjusterButtons.repeat-mode #trackGainToggle{display:none}
 #trackAdjusterButtons.repeat-mode #explicitTrackToggle{display:none}
-#trackStartToggle,#trackEndToggle,#trackGainToggle,#trackStartDefaultBtn,#trackGainDefaultBtn,#trackGainUnityBtn{width:auto;height:auto;min-width:28px;min-height:28px;background:transparent;border-radius:0;color:#bfbfbf;font-size:28px;line-height:1;padding:0;transition:color .15s ease,opacity .15s ease}
+#trackStartToggle,#trackEndToggle,#trackGainToggle,#trackStartDefaultBtn,#trackEndDefaultBtn,#trackGainDefaultBtn,#trackGainUnityBtn{width:auto;height:auto;min-width:28px;min-height:28px;background:transparent;border-radius:0;color:#bfbfbf;font-size:28px;line-height:1;padding:0;transition:color .15s ease,opacity .15s ease}
 #trackStartToggle{display:inline-flex;align-items:center;gap:1px}
 #trackStartToggle .dim{color:#666}
 #trackEndToggle{display:inline-flex;align-items:center;gap:1px}
 #trackEndToggle .dim{color:#666}
 #trackGainToggle{font-size:24px}
-#trackStartDefaultBtn,#trackGainDefaultBtn,#trackGainUnityBtn{display:none;font-size:20px}
+#trackStartDefaultBtn,#trackEndDefaultBtn,#trackGainDefaultBtn,#trackGainUnityBtn{display:none;font-size:20px}
 #trackGainUnityBtn{font-size:16px;font-weight:600;letter-spacing:.02em}
-#trackStartToggle.on,#trackEndToggle.on,#trackGainToggle.on,#trackStartDefaultBtn.on,#trackGainDefaultBtn.on,#trackGainUnityBtn.on{color:#23fd23}
-#trackStartToggle:disabled,#trackEndToggle:disabled,#trackGainToggle:disabled,#trackStartDefaultBtn:disabled,#trackGainDefaultBtn:disabled,#trackGainUnityBtn:disabled{opacity:.35}
+#trackStartToggle.on,#trackEndToggle.on,#trackGainToggle.on,#trackStartDefaultBtn.on,#trackEndDefaultBtn.on,#trackGainDefaultBtn.on,#trackGainUnityBtn.on{color:#23fd23}
+#trackStartToggle:disabled,#trackEndToggle:disabled,#trackGainToggle:disabled,#trackStartDefaultBtn:disabled,#trackEndDefaultBtn:disabled,#trackGainDefaultBtn:disabled,#trackGainUnityBtn:disabled{opacity:.35}
 #gainInfo,#trackStartInfo{color:#666;font-size:13px;transition:color .15s ease,font-size .15s ease}
 #gainInfo.active,#trackStartInfo.active{color:#f2f2f2;font-size:16px}
 #trackStartWheel{--track-start-shift:0px;position:relative;display:none;width:42px;height:140px;border-radius:21px;border:1px solid rgba(255,255,255,.12);overflow:hidden;touch-action:none;background:
@@ -146,6 +147,7 @@ rgba(255,255,255,.36) 23px 25px
                     <button id=explicitTrackToggle type=button aria-label="Toggle explicit for current track" aria-pressed="false">E</button>
                     <button id=trackRepeatToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Edit repeat count for current track" aria-pressed="false">&#x21BA;</button>
                     <button id=trackStartDefaultBtn type=button aria-label="Recalculate start time">&#x21BB;</button>
+                    <button id=trackEndDefaultBtn type=button aria-label="Reset end offset">&times;</button>
                     <button id=trackGainDefaultBtn type=button aria-label="Restore automatic gain">&#x21BB;</button>
                     <button id=trackGainUnityBtn type=button aria-label="Set gain to 1.00x">1.0</button>
                 </div>

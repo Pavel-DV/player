@@ -265,6 +265,14 @@ export function createTrackRotationController({
       );
     }
 
+    if (dom.trackEndDefaultBtnEl) {
+      dom.trackEndDefaultBtnEl.disabled = !knobState.currentTrackKey;
+      dom.trackEndDefaultBtnEl.classList.toggle(
+        'on',
+        isEndActive && knobState.currentEndTime < 0.0005
+      );
+    }
+
     if (dom.trackGainToggleEl) {
       dom.trackGainToggleEl.classList.toggle('on', isGainActive || hasCustomGain);
       dom.trackGainToggleEl.setAttribute(
@@ -356,6 +364,10 @@ export function createTrackRotationController({
       dom.trackGainDefaultBtnEl.disabled = !currentTrackKey;
     }
 
+    if (dom.trackEndDefaultBtnEl) {
+      dom.trackEndDefaultBtnEl.disabled = !currentTrackKey;
+    }
+
     if (dom.trackGainUnityBtnEl) {
       dom.trackGainUnityBtnEl.disabled = !currentTrackKey;
     }
@@ -415,6 +427,7 @@ export function createTrackRotationController({
       !dom.trackGainToggleEl ||
       !dom.trackRepeatToggleEl ||
       !dom.trackStartDefaultBtnEl ||
+      !dom.trackEndDefaultBtnEl ||
       !dom.trackGainDefaultBtnEl ||
       !dom.trackGainUnityBtnEl ||
       !dom.trackStartWheelEl
@@ -455,6 +468,19 @@ export function createTrackRotationController({
       renderWheel();
       renderAdjusterInfo(knobState.currentStartOffset);
       previewStartOffset?.(knobState.currentStartOffset);
+    });
+
+    dom.trackEndDefaultBtnEl.addEventListener('click', event => {
+      if (!knobState.currentTrackKey) {
+        return;
+      }
+
+      event.preventDefault();
+      knobState.currentEndTime = 0;
+      saveTrackEndTime(knobState.currentTrackKey, 0);
+      applyControlState();
+      renderWheel();
+      renderAdjusterInfo(knobState.currentStartOffset);
     });
 
     dom.trackGainDefaultBtnEl.addEventListener('click', event => {
@@ -616,7 +642,7 @@ export function createTrackRotationController({
       if (
         !knobState.activeControl ||
         event.target.closest(
-          '#trackStartToggle, #trackEndToggle, #trackGainToggle, #trackRepeatToggle, #trackStartDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, #trackStartWheel'
+          '#trackStartToggle, #trackEndToggle, #trackGainToggle, #trackRepeatToggle, #trackStartDefaultBtn, #trackEndDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, #trackStartWheel'
         )
       ) {
         return;

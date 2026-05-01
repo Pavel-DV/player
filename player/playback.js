@@ -1116,7 +1116,7 @@ export function createPlaybackController({
 
       state.repeatTrackKey = null;
       state.repeatRemaining = null;
-      next();
+      next({ continuePlayback: true });
     };
 
     lastEndedHandlerSequenceId = sequenceId;
@@ -1557,10 +1557,17 @@ export function createPlaybackController({
     return direction === 'prev' ? queue[queue.length - 1] : queue[0];
   }
 
-  function next() {
+  function next({ continuePlayback = false } = {}) {
     const queue = getQueueIndices(state);
+    const shouldContinuePlaying =
+      continuePlayback ||
+      state.isPlaying ||
+      Boolean(dom.audioElement && !dom.audioElement.paused);
+
     tracePlayback('playback.next.begin', {
+      continuePlayback,
       queueLength: queue.length,
+      shouldContinuePlaying,
     });
 
     if (queue.length === 0) {
@@ -1588,13 +1595,27 @@ export function createPlaybackController({
       nextIndex: state.index,
       queue,
     });
-    play();
+
+    if (shouldContinuePlaying) {
+      play();
+      return;
+    }
+
+    void primeCurrentTrackSource();
+    void ui.highlight();
+    ui.updatePlaylistsButtons();
+    savePlayerState();
   }
 
   function prev() {
     const queue = getQueueIndices(state);
+    const shouldContinuePlaying =
+      state.isPlaying ||
+      Boolean(dom.audioElement && !dom.audioElement.paused);
+
     tracePlayback('playback.prev.begin', {
       queueLength: queue.length,
+      shouldContinuePlaying,
     });
 
     if (queue.length === 0) {
@@ -1662,7 +1683,16 @@ export function createPlaybackController({
       previousIndex: state.index,
       queue,
     });
-    play();
+
+    if (shouldContinuePlaying) {
+      play();
+      return;
+    }
+
+    void primeCurrentTrackSource();
+    void ui.highlight();
+    ui.updatePlaylistsButtons();
+    savePlayerState();
   }
 
   function setShuffle(enabled) {
