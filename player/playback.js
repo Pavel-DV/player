@@ -386,29 +386,19 @@ export function createPlaybackController({
       : 0;
   }
 
-  function normalizeEndTime(endTime, duration, startOffset = 0) {
-    if (!(Number.isFinite(endTime) && endTime > 0)) {
-      return 0;
-    }
-
-    if (Number.isFinite(duration) && duration > 0) {
-      return Math.min(
-        duration,
-        Math.max(getMinTrackEndTime(duration, startOffset), endTime)
-      );
-    }
-
-    return Math.max(0, endTime);
-  }
-
   function getTrackEndTime(file, duration = NaN) {
     if (!file) {
       return 0;
     }
 
     const trackStartOffset = getTrackStartOffset(file);
-    const trackEndTime = loadTrackEndTime(getFileKey(file));
-    return normalizeEndTime(trackEndTime, duration, trackStartOffset);
+    const endOffset = loadTrackEndTime(getFileKey(file));
+
+    if (!(Number.isFinite(duration) && duration > 0 && Number.isFinite(endOffset) && endOffset > 0)) {
+      return 0;
+    }
+
+    return Math.max(getMinTrackEndTime(duration, trackStartOffset), duration - endOffset);
   }
 
   function getTrackPlaybackEndTime(file, duration = NaN) {
@@ -1432,7 +1422,7 @@ export function createPlaybackController({
     play();
   }
 
-  function previewEndOffset(endTime) {
+  function previewEndOffset(endOffset) {
     const file = state.files[state.index];
 
     if (!file || !dom.audioElement) {
@@ -1440,14 +1430,15 @@ export function createPlaybackController({
     }
 
     const trackStartOffset = getTrackStartOffset(file);
-    const normalizedEndTime = normalizeEndTime(
-      endTime,
-      dom.audioElement.duration,
-      trackStartOffset
-    );
-    const nextEndTime = normalizedEndTime > 0
-      ? normalizedEndTime
-      : dom.audioElement.duration;
+    const duration = dom.audioElement.duration;
+    const minEndTime = getMinTrackEndTime(duration, trackStartOffset);
+    const nextEndTime =
+      Number.isFinite(duration) &&
+      duration > 0 &&
+      Number.isFinite(endOffset) &&
+      endOffset > 0
+        ? Math.max(minEndTime, duration - endOffset)
+        : duration;
 
     const previewStartTime = Math.max(
       trackStartOffset,

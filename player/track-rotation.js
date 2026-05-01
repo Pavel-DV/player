@@ -88,14 +88,11 @@ export function createTrackRotationController({
       return 0;
     }
 
-    if (!(Number.isFinite(duration) && duration > 0)) {
-      return Math.max(0, endTime);
-    }
-
-    return Math.min(
-      Math.max(getMinTrackEndTime(duration, startOffset), endTime),
-      duration
-    );
+    const minEndTime = getMinTrackEndTime(duration, startOffset);
+    const maxEndOffset = Number.isFinite(duration) && duration > 0
+      ? Math.max(0, duration - minEndTime)
+      : Infinity;
+    return Math.min(Math.max(0, endTime), maxEndOffset);
   }
 
   function normalizeTrackGain(gain) {
@@ -165,17 +162,7 @@ export function createTrackRotationController({
     duration = getCurrentTrackDuration(),
     startOffset = knobState.currentStartOffset
   ) {
-    const normalizedEndTime = normalizeTrackEndTime(
-      endTime,
-      duration,
-      startOffset
-    );
-
-    if (normalizedEndTime > 0) {
-      return normalizedEndTime;
-    }
-
-    return Number.isFinite(duration) && duration > 0 ? duration : 0;
+    return normalizeTrackEndTime(endTime, duration, startOffset);
   }
 
   function renderWheel() {
@@ -224,7 +211,8 @@ export function createTrackRotationController({
     if (knobState.activeControl === 'repeat') {
       dom.trackStartInfoEl.textContent = `Repeat: ${knobState.currentRepeatCount}`;
     } else if (knobState.activeControl === 'end') {
-      dom.trackStartInfoEl.textContent = `End: ${formatStartOffset(getEffectiveTrackEndTime())}`;
+      const endOffsetSeconds = getEffectiveTrackEndTime();
+      dom.trackStartInfoEl.textContent = `End: -${Number(endOffsetSeconds.toFixed(3))}s`;
     } else {
       dom.trackStartInfoEl.textContent = `Start: ${formatStartOffset(offset)}`;
     }
