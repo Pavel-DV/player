@@ -258,8 +258,9 @@ export function createUiController({
 
   async function highlight() {
     if (dom.listEl) {
-      [...dom.listEl.children].forEach((listItem, itemIndex) => {
+      [...dom.listEl.children].forEach(listItem => {
         const span = listItem.querySelector('span');
+        const itemIndex = Number(listItem.dataset.fileIndex);
 
         if (!span) {
           return;
@@ -501,13 +502,48 @@ export function createUiController({
 
     const currentPlaylist = getCurrentPlaylist();
     const playlistItems = new Set(currentPlaylist?.items ?? []);
+    const displayedKeys = new Set();
+    const displayedFileIndices = new Set();
+    const orderedEntries = [];
 
     state.files.forEach((file, itemIndex) => {
+      const key = getFileKey(file);
+
+      if (playlistItems.has(key)) {
+        return;
+      }
+
+      displayedKeys.add(key);
+      displayedFileIndices.add(itemIndex);
+      orderedEntries.push({ file, itemIndex });
+    });
+
+    (currentPlaylist?.items ?? []).forEach(key => {
+      const fileIndex = state.fileIndexByKey.get(key);
+
+      if (!key || typeof fileIndex !== 'number') {
+        return;
+      }
+
+      if (displayedKeys.has(key) || displayedFileIndices.has(fileIndex)) {
+        return;
+      }
+
+      displayedKeys.add(key);
+      displayedFileIndices.add(fileIndex);
+      orderedEntries.push({
+        file: state.files[fileIndex],
+        itemIndex: fileIndex,
+      });
+    });
+
+    orderedEntries.forEach(({ file, itemIndex }) => {
       const key = getFileKey(file);
       const libraryLabel = getDisplayName(key) || file?.name || key || 'Untitled track';
       const isPersistedToOpfs = state.opfsPersistedTrackKeys.has(key);
       const isPendingOpfsSave = state.opfsPendingTrackKeys.has(key);
       const listItem = document.createElement('li');
+      listItem.dataset.fileIndex = String(itemIndex);
       listItem.style.display = 'flex';
       listItem.style.alignItems = 'center';
       listItem.style.gap = '8px';

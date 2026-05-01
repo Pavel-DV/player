@@ -1,5 +1,4 @@
-const BUILD_ID = '127';
-const CACHE_NAME = `player-v${BUILD_ID}`;
+const CACHE_NAME = 'player';
 const ASSETS = [
   '/',
   '/index.html',
