@@ -3,15 +3,6 @@ import {
   setFileKey,
 } from './shared.js';
 
-function sortFilesByKey(files, getFileKey) {
-  return [...files].sort((left, right) =>
-    getFileKey(left).localeCompare(getFileKey(right), undefined, {
-      numeric: true,
-      sensitivity: 'base',
-    })
-  );
-}
-
 export function createLibraryController({
   state,
   dom,
@@ -106,9 +97,8 @@ export function createLibraryController({
     const currentTrackKey = state.files[state.index]
       ? getFileKey(state.files[state.index])
       : null;
-    const orderedFiles = sortFilesByKey(nextFiles, getFileKey);
 
-    state.files = orderedFiles;
+    state.files = [...nextFiles];
     state.fileIndexByKey = buildFileIndexByKey(state.files, getFileKey);
     migratePlaylistKeys();
 
@@ -139,6 +129,15 @@ export function createLibraryController({
       .map(file => setFileKey(file, file.webkitRelativePath || file.name));
   }
 
+  function prependFilesToLibrary(selectedFiles) {
+    const selectedKeys = new Set(selectedFiles.map(file => getFileKey(file)));
+
+    return [
+      ...selectedFiles,
+      ...state.files.filter(file => !selectedKeys.has(getFileKey(file))),
+    ];
+  }
+
   function pickMusicDirectory() {
     dom.fileInput?.click();
     return true;
@@ -158,10 +157,12 @@ export function createLibraryController({
       }
 
       const saveSequence = state.opfsSaveSequence + 1;
+      const nextFiles = prependFilesToLibrary(selectedFiles);
+
       state.opfsSaveSequence = saveSequence;
       markLibraryPending(selectedFiles);
-      rebuildLibrary(selectedFiles);
-      void persistLibrary?.(selectedFiles, {
+      rebuildLibrary(nextFiles);
+      void persistLibrary?.(nextFiles, {
         onFileSaved: key => {
           if (
             saveSequence !== state.opfsSaveSequence ||
