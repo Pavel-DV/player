@@ -19,14 +19,10 @@ const ASSETS = [
   '/player/ui.js'
 ];
 
-function reloadRequest(request) {
-  return new Request(request, { cache: 'reload' });
-}
-
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME).then(cache =>
-      Promise.all(ASSETS.map(asset => cache.add(reloadRequest(asset))))
+      Promise.all(ASSETS.map(asset => cache.add(new Request(asset, { cache: 'reload' }))))
     )
   );
   self.skipWaiting();
@@ -42,52 +38,30 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') {
+    return;
+  }
+
   e.respondWith((async () => {
     const url = new URL(e.request.url);
-    const client = e.clientId ? await self.clients.get(e.clientId) : null;
-    const clientUrl = client ? new URL(client.url) : null;
-    const isRefreshRequest =
-      url.searchParams.has('v') || Boolean(clientUrl?.searchParams.has('v'));
-    const isSameOriginAsset =
-      e.request.method === 'GET' && url.origin === self.location.origin;
 
-    if (isRefreshRequest) {
+    if (url.origin !== self.location.origin) {
       return fetch(e.request);
     }
 
-    if (isSameOriginAsset) {
-      try {
-        const networkResponse = await fetch(reloadRequest(e.request));
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(e.request, networkResponse.clone());
-        return networkResponse;
-      } catch (error) {
-        const cachedResponse = await caches.match(e.request, { ignoreSearch: true });
+    try {
+      const networkResponse = await fetch(new Request(e.request, { cache: 'reload' }));
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(e.request, networkResponse.clone());
+      return networkResponse;
+    } catch (error) {
+      const cachedResponse = await caches.match(e.request, { ignoreSearch: true });
 
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-
-        throw error;
+      if (cachedResponse) {
+        return cachedResponse;
       }
+
+      throw error;
     }
-
-    const cachedResponse = await caches.match(e.request);
-
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    return fetch(e.request);
   })());
-});
-
-self.addEventListener('message', e => {
-  if (e.data === 'CLEAR_CACHE') {
-    e.waitUntil(
-      caches.keys().then(keys => 
-        Promise.all(keys.map(key => caches.delete(key)))
-      ).then(() => self.skipWaiting())
-    );
-  }
 });

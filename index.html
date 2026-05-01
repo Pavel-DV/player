@@ -188,40 +188,21 @@ rgba(255,255,255,.36) 23px 25px
 </div>
 <script>
 (function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const version = urlParams.get('v');
     const script = document.createElement('script');
     script.type = 'module';
-    script.src = version ? 'player.js?v=' + version : 'player.js';
+    script.src = 'player.js';
     document.currentScript.parentNode.insertBefore(script, document.currentScript);
 })();
 
-const FORCE_REFRESH_KEY = 'playerForceRefresh';
-
-async function refreshAppCaches(reg) {
-    if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage('CLEAR_CACHE');
-    }
-
-    const cacheNames = await caches.keys();
-    await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
-    await reg.update();
-}
-
 async function refreshApp() {
-    const cacheBuster = String(Date.now());
-    const nextUrl = new URL(window.location.href);
-    nextUrl.searchParams.set('v', cacheBuster);
-    localStorage.setItem(FORCE_REFRESH_KEY, '1');
-
     try {
         const reg = await navigator.serviceWorker.getRegistration();
-        await refreshAppCaches(reg);
+        await reg?.update();
     } catch (error) {
-        console.error('Failed to fully refresh app caches:', error);
+        console.error('Failed to update service worker:', error);
     }
 
-    window.location.replace(nextUrl.toString());
+    window.location.reload();
 }
 
 let refreshingForNewWorker = false;
@@ -230,13 +211,6 @@ window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
         .then(async reg => {
             await reg.update();
-
-            if (localStorage.getItem(FORCE_REFRESH_KEY) === '1' && !new URLSearchParams(window.location.search).has('v')) {
-                refreshingForNewWorker = true;
-                await refreshAppCaches(reg);
-                localStorage.removeItem(FORCE_REFRESH_KEY);
-                window.location.reload();
-            }
         })
         .catch(() => {});
 });
