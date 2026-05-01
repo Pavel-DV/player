@@ -1,4 +1,5 @@
-const CACHE_NAME = 'player-v12';
+const BUILD_ID = '126';
+const CACHE_NAME = `player-v${BUILD_ID}`;
 const ASSETS = [
   '/',
   '/index.html',
@@ -18,9 +19,15 @@ const ASSETS = [
   '/player/ui.js'
 ];
 
+function reloadRequest(request) {
+  return new Request(request, { cache: 'reload' });
+}
+
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(ASSETS.map(asset => cache.add(reloadRequest(asset))))
+    )
   );
   self.skipWaiting();
 });
@@ -50,12 +57,12 @@ self.addEventListener('fetch', e => {
 
     if (isSameOriginAsset) {
       try {
-        const networkResponse = await fetch(e.request);
+        const networkResponse = await fetch(reloadRequest(e.request));
         const cache = await caches.open(CACHE_NAME);
         cache.put(e.request, networkResponse.clone());
         return networkResponse;
       } catch (error) {
-        const cachedResponse = await caches.match(e.request);
+        const cachedResponse = await caches.match(e.request, { ignoreSearch: true });
 
         if (cachedResponse) {
           return cachedResponse;

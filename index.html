@@ -196,23 +196,27 @@ rgba(255,255,255,.36) 23px 25px
     document.currentScript.parentNode.insertBefore(script, document.currentScript);
 })();
 
+const FORCE_REFRESH_KEY = 'playerForceRefresh';
+
+async function refreshAppCaches(reg) {
+    if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage('CLEAR_CACHE');
+    }
+
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+    await reg.update();
+}
+
 async function refreshApp() {
     const cacheBuster = String(Date.now());
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.set('v', cacheBuster);
+    localStorage.setItem(FORCE_REFRESH_KEY, '1');
 
     try {
-        if (navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage('CLEAR_CACHE');
-        }
-
-        const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
-
         const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) {
-            await reg.update();
-        }
+        await refreshAppCaches(reg);
     } catch (error) {
         console.error('Failed to fully refresh app caches:', error);
     }
@@ -220,8 +224,30 @@ async function refreshApp() {
     window.location.replace(nextUrl.toString());
 }
 
+let refreshingForNewWorker = false;
+
 window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+        .then(async reg => {
+            await reg.update();
+
+            if (localStorage.getItem(FORCE_REFRESH_KEY) === '1' && !new URLSearchParams(window.location.search).has('v')) {
+                refreshingForNewWorker = true;
+                await refreshAppCaches(reg);
+                localStorage.removeItem(FORCE_REFRESH_KEY);
+                window.location.reload();
+            }
+        })
+        .catch(() => {});
+});
+
+navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshingForNewWorker) {
+        return;
+    }
+
+    refreshingForNewWorker = true;
+    window.location.reload();
 });
 </script>
 </body>
