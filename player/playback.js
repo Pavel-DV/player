@@ -16,6 +16,17 @@ function getMaxTrackStartOffset(duration) {
   return Math.max(0, duration - START_OFFSET_END_TOLERANCE_SECONDS);
 }
 
+function getMinTrackEndTime(duration, startOffset = 0) {
+  if (!(Number.isFinite(duration) && duration > 0)) {
+    return Math.max(0, startOffset);
+  }
+
+  return Math.min(
+    duration,
+    Math.max(0, startOffset) + START_OFFSET_END_TOLERANCE_SECONDS
+  );
+}
+
 function setMediaSessionPlaybackState(state) {
   if (!('mediaSession' in navigator)) {
     return;
@@ -36,7 +47,9 @@ export function createPlaybackController({
   getDisplayName,
   getQueueIndices,
   loadNormInfo,
+  loadTrackEndTime,
   loadTrackGain,
+  loadTrackRepeatCount,
   loadTrackStartTime,
   saveNormInfo,
   saveSettings,
@@ -373,6 +386,45 @@ export function createPlaybackController({
       : 0;
   }
 
+  function normalizeEndTime(endTime, duration, startOffset = 0) {
+    if (!(Number.isFinite(endTime) && endTime > 0)) {
+      return 0;
+    }
+
+    if (Number.isFinite(duration) && duration > 0) {
+      return Math.min(
+        duration,
+        Math.max(getMinTrackEndTime(duration, startOffset), endTime)
+      );
+    }
+
+    return Math.max(0, endTime);
+  }
+
+  function getTrackEndTime(file, duration = NaN) {
+    if (!file) {
+      return 0;
+    }
+
+    const trackStartOffset = getTrackStartOffset(file);
+    const trackEndTime = loadTrackEndTime(getFileKey(file));
+    return normalizeEndTime(trackEndTime, duration, trackStartOffset);
+  }
+
+  function getTrackPlaybackEndTime(file, duration = NaN) {
+    if (!(Number.isFinite(duration) && duration > 0)) {
+      return Infinity;
+    }
+
+    const trackEndTime = getTrackEndTime(file, duration);
+    return trackEndTime > 0 ? trackEndTime : duration;
+  }
+
+  function clearPreviewEndTarget() {
+    state.previewEndTime = null;
+    state.previewEndTrackKey = null;
+  }
+
   function getStartOffsetForPlayback(file, requestedOffset, duration = NaN) {
     const nextOffset =
       Number.isFinite(requestedOffset) && requestedOffset > 0
@@ -380,6 +432,25 @@ export function createPlaybackController({
         : getTrackStartOffset(file);
 
     return normalizeStartOffset(nextOffset, duration);
+  }
+
+  function syncRepeatForCurrentTrack({ force = false } = {}) {
+    const file = state.files[state.index];
+    const trackKey = file ? getFileKey(file) : null;
+
+    if (!trackKey) {
+      state.repeatTrackKey = null;
+      state.repeatRemaining = null;
+      return;
+    }
+
+    if (!force && state.repeatTrackKey === trackKey && typeof state.repeatRemaining === 'number') {
+      return;
+    }
+
+    const repeatCount = loadTrackRepeatCount?.(trackKey) ?? 1;
+    state.repeatTrackKey = trackKey;
+    state.repeatRemaining = Math.max(0, (Number.isFinite(repeatCount) ? repeatCount : 1) - 1);
   }
 
   function syncPendingStartOffset(reason = 'unknown') {
@@ -995,6 +1066,7 @@ export function createPlaybackController({
     }
 
     dom.audioElement.onended = () => {
+      clearPreviewEndTarget();
       tracePlayback('audio.onended', {
         sequenceId,
         source,
@@ -1013,6 +1085,27 @@ export function createPlaybackController({
       state.offset = 0;
       setMediaSessionPlaybackState('paused');
       void ui.highlight();
+
+      const currentFile = state.files[state.index];
+      const currentTrackKey = currentFile ? getFileKey(currentFile) : null;
+
+      if (
+        currentTrackKey &&
+        state.repeatTrackKey === currentTrackKey &&
+        typeof state.repeatRemaining === 'number' &&
+        state.repeatRemaining > 0
+      ) {
+        state.repeatRemaining -= 1;
+        tracePlayback('audio.onended.repeat', {
+          remaining: state.repeatRemaining,
+          trackKey: currentTrackKey,
+        });
+        play();
+        return;
+      }
+
+      state.repeatTrackKey = null;
+      state.repeatRemaining = null;
       next();
     };
 
@@ -1027,6 +1120,7 @@ export function createPlaybackController({
     tracePlayback('playback.kill.begin');
     state.isPlaying = false;
     state.pendingStartOffset = null;
+    clearPreviewEndTarget();
     state.pendingPlaySequence = ++state.playSequence;
 
     if (dom.audioElement) {
@@ -1084,6 +1178,7 @@ export function createPlaybackController({
       return;
     }
 
+    syncRepeatForCurrentTrack();
     ensurePlaybackAudioSession('playback.play');
     resumeAudioGraph('playback.play');
     // Keep this on each play path; one-time setup caused lock-screen track buttons to disappear.
@@ -1199,6 +1294,7 @@ export function createPlaybackController({
     dom.audioElement.pause();
     state.offset = dom.audioElement.currentTime || 0;
     state.pendingStartOffset = null;
+    clearPreviewEndTarget();
     tracePlayback('playback.pauseSoft', {
       offset: Number(state.offset.toFixed(3)),
     });
@@ -1216,6 +1312,7 @@ export function createPlaybackController({
     dom.audioElement.pause();
     state.offset = dom.audioElement.currentTime || 0;
     state.pendingStartOffset = null;
+    clearPreviewEndTarget();
     state.isPlaying = false;
     tracePlayback('playback.pause', {
       offset: Number(state.offset.toFixed(3)),
@@ -1241,6 +1338,7 @@ export function createPlaybackController({
     const file = state.files[trackIndex];
     state.index = trackIndex;
     state.offset = 0;
+    syncRepeatForCurrentTrack({ force: true });
     kill();
 
     if (!file || !isTrackAllowed(getFileKey(file))) {
@@ -1269,6 +1367,8 @@ export function createPlaybackController({
       offset,
       dom.audioElement.duration
     );
+
+    clearPreviewEndTarget();
 
     state.offset = nextOffset;
     state.pendingStartOffset = nextOffset;
@@ -1306,6 +1406,77 @@ export function createPlaybackController({
         void playForSequence(state.playSequence, 'Failed to preview playback:');
       }
 
+      return;
+    }
+
+    play();
+  }
+
+  function previewEndOffset(endTime) {
+    const file = state.files[state.index];
+
+    if (!file || !dom.audioElement) {
+      return;
+    }
+
+    const trackStartOffset = getTrackStartOffset(file);
+    const normalizedEndTime = normalizeEndTime(
+      endTime,
+      dom.audioElement.duration,
+      trackStartOffset
+    );
+    const nextEndTime = normalizedEndTime > 0
+      ? normalizedEndTime
+      : dom.audioElement.duration;
+
+    const previewStartTime = Math.max(
+      trackStartOffset,
+      nextEndTime - 1
+    );
+
+    clearPreviewEndTarget();
+
+    if (!(Number.isFinite(nextEndTime) && nextEndTime > 0)) {
+      return;
+    }
+
+    state.previewEndTime = nextEndTime;
+    state.previewEndTrackKey = getFileKey(file);
+    state.offset = previewStartTime;
+    state.pendingStartOffset = previewStartTime;
+
+    tracePlayback('playback.preview-end-offset', {
+      endTime: Number(nextEndTime.toFixed(3)),
+      previewStartTime: Number(previewStartTime.toFixed(3)),
+      trackKey: getFileKey(file),
+    });
+
+    const hasPlayableCurrentSource =
+      Boolean(dom.audioElement.src) && dom.audioElement.src !== window.location.href;
+    const hasMatchingActiveSource =
+      hasPlayableCurrentSource && currentSourceTrackKey === getFileKey(file);
+
+    if (hasMatchingActiveSource) {
+      try {
+        dom.audioElement.currentTime = previewStartTime;
+        state.pendingStartOffset = null;
+      } catch (error) {
+        tracePlayback('playback.preview-end-offset.seek-failed', {
+          endTime: Number(nextEndTime.toFixed(3)),
+          error: summarizeError(error),
+          previewStartTime: Number(previewStartTime.toFixed(3)),
+          trackKey: getFileKey(file),
+        });
+      }
+
+      syncMediaSession('playback.preview-end-offset');
+      ensurePlaybackAudioSession('playback.preview-end-offset');
+      setupMediaSessionHandlers();
+      bindEndedHandler(
+        state.playSequence,
+        'playback.preview-end-offset.resume-existing-source'
+      );
+      void playForSequence(state.playSequence, 'Failed to preview end playback:');
       return;
     }
 
@@ -1399,6 +1570,7 @@ export function createPlaybackController({
     kill();
     state.index = nextIndex;
     state.offset = 0;
+    syncRepeatForCurrentTrack({ force: true });
     tracePlayback('playback.next.selected', {
       nextIndex: state.index,
       queue,
@@ -1472,6 +1644,7 @@ export function createPlaybackController({
     kill();
     state.index = previousIndex;
     state.offset = 0;
+    syncRepeatForCurrentTrack({ force: true });
     tracePlayback('playback.prev.selected', {
       previousIndex: state.index,
       queue,
@@ -1685,6 +1858,53 @@ export function createPlaybackController({
         { throttleTimeupdate: true }
       );
       syncMediaSession('timeupdate');
+
+      const file = state.files[state.index];
+      const currentTrackKey = file ? getFileKey(file) : null;
+
+      if (
+        file &&
+        state.previewEndTrackKey === currentTrackKey &&
+        Number.isFinite(state.previewEndTime) &&
+        state.offset >= state.previewEndTime
+      ) {
+        try {
+          dom.audioElement.currentTime = state.previewEndTime;
+        } catch (error) {
+          tracePlayback('audio.event.timeupdate.preview-end.seek-failed', {
+            error: summarizeError(error),
+            previewEndTime: Number(state.previewEndTime.toFixed(3)),
+            trackKey: currentTrackKey,
+          });
+        }
+
+        tracePlayback('audio.event.timeupdate.preview-end.pause', {
+          previewEndTime: Number(state.previewEndTime.toFixed(3)),
+          trackKey: currentTrackKey,
+        });
+        clearPreviewEndTarget();
+        pause();
+        return;
+      }
+
+      const effectiveEndTime = file
+        ? getTrackPlaybackEndTime(file, dom.audioElement.duration)
+        : Infinity;
+
+      if (
+        file &&
+        state.isPlaying &&
+        Number.isFinite(effectiveEndTime) &&
+        effectiveEndTime > 0 &&
+        state.offset >= effectiveEndTime
+      ) {
+        tracePlayback('audio.event.timeupdate.end-threshold', {
+          effectiveEndTime: Number(effectiveEndTime.toFixed(3)),
+          offset: Number(state.offset.toFixed(3)),
+          trackKey: getFileKey(file),
+        });
+        dom.audioElement.onended?.();
+      }
     });
   }
 
@@ -1743,6 +1963,7 @@ export function createPlaybackController({
     pause,
     pauseSoft,
     play,
+    previewEndOffset,
     prev,
     previewStartOffset,
     refreshAudioElementLayout,

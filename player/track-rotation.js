@@ -3,25 +3,37 @@ const DRAG_SECONDS_PER_PIXEL = 0.04;
 const DRAG_GAIN_PER_PIXEL = 0.01;
 const MAX_TRACK_GAIN = 4;
 const MIN_TRACK_GAIN = 0;
+const MAX_TRACK_REPEAT_COUNT = 999;
 const START_WHEEL_SHIFT_PIXELS_PER_SECOND = 24;
+const END_WHEEL_SHIFT_PIXELS_PER_SECOND = 24;
 const GAIN_WHEEL_SHIFT_PIXELS_PER_UNIT = 100;
+const REPEAT_WHEEL_SHIFT_PIXELS_PER_STEP = 24;
 
 export function createTrackRotationController({
   dom,
   state,
   getFileKey,
   loadNormInfo,
+  loadTrackEndTime,
   loadTrackGain,
+  loadTrackRepeatCount,
   loadTrackStartTime,
   recalculateTrackStartOffset,
+  saveTrackEndTime,
   saveTrackGain,
+  saveTrackRepeatCount,
   saveTrackStartTime,
+  onRepeatCountChange,
+  previewEndOffset,
   previewStartOffset,
   previewTrackGain,
 }) {
   const knobState = {
     activeControl: null,
+    currentEndTime: 0,
     currentGain: 1,
+    currentRepeatCount: 1,
+    currentRepeatVisualValue: 1,
     currentStartOffset: 0,
     currentTrackKey: null,
     dragStartValue: 0,
@@ -61,12 +73,56 @@ export function createTrackRotationController({
     return Math.min(Math.max(0, offset), getMaxTrackStartOffset(duration));
   }
 
+  function getMinTrackEndTime(duration, startOffset = 0) {
+    const nextStartOffset = Math.max(0, startOffset);
+
+    if (!(Number.isFinite(duration) && duration > 0)) {
+      return nextStartOffset;
+    }
+
+    return Math.min(duration, nextStartOffset + START_OFFSET_END_TOLERANCE_SECONDS);
+  }
+
+  function normalizeTrackEndTime(endTime, duration, startOffset = 0) {
+    if (!(Number.isFinite(endTime) && endTime > 0)) {
+      return 0;
+    }
+
+    if (!(Number.isFinite(duration) && duration > 0)) {
+      return Math.max(0, endTime);
+    }
+
+    return Math.min(
+      Math.max(getMinTrackEndTime(duration, startOffset), endTime),
+      duration
+    );
+  }
+
   function normalizeTrackGain(gain) {
     if (!Number.isFinite(gain)) {
       return 1;
     }
 
     return Math.min(MAX_TRACK_GAIN, Math.max(MIN_TRACK_GAIN, gain));
+  }
+
+  function normalizeTrackRepeatCount(repeatCount) {
+    if (!Number.isFinite(repeatCount)) {
+      return 1;
+    }
+
+    return Math.min(
+      MAX_TRACK_REPEAT_COUNT,
+      Math.max(1, Math.round(repeatCount))
+    );
+  }
+
+  function normalizeTrackRepeatVisualValue(repeatCount) {
+    if (!Number.isFinite(repeatCount)) {
+      return 1;
+    }
+
+    return Math.min(MAX_TRACK_REPEAT_COUNT, Math.max(1, repeatCount));
   }
 
   function getDerivedTrackGain(trackKey) {
@@ -104,6 +160,24 @@ export function createTrackRotationController({
     return `${minutes}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
   }
 
+  function getEffectiveTrackEndTime(
+    endTime = knobState.currentEndTime,
+    duration = getCurrentTrackDuration(),
+    startOffset = knobState.currentStartOffset
+  ) {
+    const normalizedEndTime = normalizeTrackEndTime(
+      endTime,
+      duration,
+      startOffset
+    );
+
+    if (normalizedEndTime > 0) {
+      return normalizedEndTime;
+    }
+
+    return Number.isFinite(duration) && duration > 0 ? duration : 0;
+  }
+
   function renderWheel() {
     if (!dom.trackStartWheelEl) {
       return;
@@ -114,8 +188,14 @@ export function createTrackRotationController({
     if (knobState.activeControl === 'start') {
       shift =
         knobState.currentStartOffset * START_WHEEL_SHIFT_PIXELS_PER_SECOND;
+    } else if (knobState.activeControl === 'end') {
+      shift =
+        getEffectiveTrackEndTime() * END_WHEEL_SHIFT_PIXELS_PER_SECOND;
     } else if (knobState.activeControl === 'gain') {
       shift = knobState.currentGain * GAIN_WHEEL_SHIFT_PIXELS_PER_UNIT;
+    } else if (knobState.activeControl === 'repeat') {
+      shift =
+        knobState.currentRepeatVisualValue * REPEAT_WHEEL_SHIFT_PIXELS_PER_STEP;
     }
 
     dom.trackStartWheelEl.style.setProperty(
@@ -124,12 +204,15 @@ export function createTrackRotationController({
     );
   }
 
-  function renderStartInfo(offset) {
+  function renderAdjusterInfo(offset) {
     if (!dom.trackStartInfoEl) {
       return;
     }
 
-    const shouldShow = knobState.activeControl === 'start';
+    const shouldShow =
+      knobState.activeControl === 'start' ||
+      knobState.activeControl === 'end' ||
+      knobState.activeControl === 'repeat';
 
     if (!shouldShow) {
       dom.trackStartInfoEl.classList.remove('active');
@@ -138,22 +221,33 @@ export function createTrackRotationController({
       return;
     }
 
-    dom.trackStartInfoEl.textContent = `Start: ${formatStartOffset(offset)}`;
+    dom.trackStartInfoEl.textContent =
+      knobState.activeControl === 'repeat'
+        ? `Repeat: ${knobState.currentRepeatCount}`
+        : knobState.activeControl === 'end'
+          ? `End: ${formatStartOffset(getEffectiveTrackEndTime())}`
+        : `Start: ${formatStartOffset(offset)}`;
     dom.trackStartInfoEl.style.display = 'block';
     dom.trackStartInfoEl.classList.toggle(
       'active',
-      knobState.activeControl === 'start'
+      knobState.activeControl === 'start' ||
+        knobState.activeControl === 'end' ||
+        knobState.activeControl === 'repeat'
     );
   }
 
   function applyControlState() {
     const isStartActive = knobState.activeControl === 'start';
+    const isEndActive = knobState.activeControl === 'end';
     const isGainActive = knobState.activeControl === 'gain';
+    const isRepeatActive = knobState.activeControl === 'repeat';
     const hasCustomGain = Math.abs(knobState.currentGain - 1) > 0.0005;
 
     if (dom.trackAdjusterButtonsEl) {
       dom.trackAdjusterButtonsEl.classList.toggle('start-mode', isStartActive);
+      dom.trackAdjusterButtonsEl.classList.toggle('end-mode', isEndActive);
       dom.trackAdjusterButtonsEl.classList.toggle('gain-mode', isGainActive);
+      dom.trackAdjusterButtonsEl.classList.toggle('repeat-mode', isRepeatActive);
     }
 
     if (dom.trackStartToggleEl) {
@@ -173,11 +267,33 @@ export function createTrackRotationController({
       );
     }
 
+    if (dom.trackEndToggleEl) {
+      const hasCustomEnd = knobState.currentEndTime > 0.0005;
+      dom.trackEndToggleEl.classList.toggle('on', isEndActive || hasCustomEnd);
+      dom.trackEndToggleEl.setAttribute(
+        'aria-expanded',
+        isEndActive ? 'true' : 'false'
+      );
+    }
+
     if (dom.trackGainToggleEl) {
       dom.trackGainToggleEl.classList.toggle('on', isGainActive || hasCustomGain);
       dom.trackGainToggleEl.setAttribute(
         'aria-expanded',
         isGainActive ? 'true' : 'false'
+      );
+    }
+
+    if (dom.trackRepeatToggleEl) {
+      const hasCustomRepeat = knobState.currentRepeatCount > 1;
+      dom.trackRepeatToggleEl.classList.toggle('on', isRepeatActive || hasCustomRepeat);
+      dom.trackRepeatToggleEl.setAttribute(
+        'aria-expanded',
+        isRepeatActive ? 'true' : 'false'
+      );
+      dom.trackRepeatToggleEl.setAttribute(
+        'aria-pressed',
+        isRepeatActive || hasCustomRepeat ? 'true' : 'false'
       );
     }
 
@@ -220,7 +336,7 @@ export function createTrackRotationController({
       nextControl && knobState.currentTrackKey ? nextControl : null;
     applyControlState();
     renderWheel();
-    renderStartInfo(knobState.currentStartOffset);
+    renderAdjusterInfo(knobState.currentStartOffset);
     updateGainPreview();
   }
 
@@ -235,8 +351,16 @@ export function createTrackRotationController({
       dom.trackStartToggleEl.disabled = !currentTrackKey;
     }
 
+    if (dom.trackEndToggleEl) {
+      dom.trackEndToggleEl.disabled = !currentTrackKey;
+    }
+
     if (dom.trackGainToggleEl) {
       dom.trackGainToggleEl.disabled = !currentTrackKey;
+    }
+
+    if (dom.trackRepeatToggleEl) {
+      dom.trackRepeatToggleEl.disabled = !currentTrackKey;
     }
 
     if (dom.trackGainDefaultBtnEl) {
@@ -249,13 +373,16 @@ export function createTrackRotationController({
 
     if (!currentTrackKey) {
       knobState.currentTrackKey = null;
+      knobState.currentEndTime = 0;
       knobState.currentStartOffset = 0;
       knobState.currentGain = 1;
+      knobState.currentRepeatCount = 1;
+      knobState.currentRepeatVisualValue = 1;
       knobState.isActive = false;
       knobState.pointerId = null;
       setActiveControl(null);
       renderWheel();
-      renderStartInfo(0);
+      renderAdjusterInfo(0);
       return;
     }
 
@@ -263,7 +390,15 @@ export function createTrackRotationController({
       loadTrackStartTime(currentTrackKey),
       getCurrentTrackDuration()
     );
+    const savedEndTime = normalizeTrackEndTime(
+      loadTrackEndTime(currentTrackKey),
+      getCurrentTrackDuration(),
+      savedStartOffset
+    );
     const savedGain = getDerivedTrackGain(currentTrackKey);
+    const savedRepeatCount = normalizeTrackRepeatCount(
+      loadTrackRepeatCount(currentTrackKey)
+    );
 
     if (
       force ||
@@ -271,20 +406,25 @@ export function createTrackRotationController({
       knobState.currentTrackKey !== currentTrackKey
     ) {
       knobState.currentTrackKey = currentTrackKey;
+      knobState.currentEndTime = savedEndTime;
       knobState.currentStartOffset = savedStartOffset;
       knobState.currentGain = savedGain;
+      knobState.currentRepeatCount = savedRepeatCount;
+      knobState.currentRepeatVisualValue = savedRepeatCount;
     }
 
     applyControlState();
     renderWheel();
-    renderStartInfo(knobState.currentStartOffset);
+    renderAdjusterInfo(knobState.currentStartOffset);
     updateGainPreview();
   }
 
   function bind() {
     if (
       !dom.trackStartToggleEl ||
+      !dom.trackEndToggleEl ||
       !dom.trackGainToggleEl ||
+      !dom.trackRepeatToggleEl ||
       !dom.trackStartDefaultBtnEl ||
       !dom.trackGainDefaultBtnEl ||
       !dom.trackGainUnityBtnEl ||
@@ -296,11 +436,18 @@ export function createTrackRotationController({
     const toggleControl = control => event => {
       event.preventDefault();
       sync(true);
-      setActiveControl(knobState.activeControl === control ? null : control);
+      const nextControl = knobState.activeControl === control ? null : control;
+      setActiveControl(nextControl);
+
+      if (nextControl === 'end') {
+        previewEndOffset?.(getEffectiveTrackEndTime());
+      }
     };
 
     dom.trackStartToggleEl.addEventListener('click', toggleControl('start'));
+    dom.trackEndToggleEl.addEventListener('click', toggleControl('end'));
     dom.trackGainToggleEl.addEventListener('click', toggleControl('gain'));
+    dom.trackRepeatToggleEl.addEventListener('click', toggleControl('repeat'));
 
     dom.trackStartDefaultBtnEl.addEventListener('click', async event => {
       if (!knobState.currentTrackKey) {
@@ -317,7 +464,7 @@ export function createTrackRotationController({
       );
       applyControlState();
       renderWheel();
-      renderStartInfo(knobState.currentStartOffset);
+      renderAdjusterInfo(knobState.currentStartOffset);
       previewStartOffset?.(knobState.currentStartOffset);
     });
 
@@ -359,9 +506,13 @@ export function createTrackRotationController({
       knobState.dragStartValue =
         knobState.activeControl === 'gain'
           ? knobState.currentGain
-          : knobState.currentStartOffset;
+          : knobState.activeControl === 'repeat'
+            ? knobState.currentRepeatVisualValue
+            : knobState.activeControl === 'end'
+              ? getEffectiveTrackEndTime()
+            : knobState.currentStartOffset;
       dom.trackStartWheelEl.setPointerCapture(event.pointerId);
-      renderStartInfo(knobState.currentStartOffset);
+      renderAdjusterInfo(knobState.currentStartOffset);
       updateGainPreview();
     });
 
@@ -389,8 +540,30 @@ export function createTrackRotationController({
         saveTrackStartTime(knobState.currentTrackKey, nextOffset);
         applyControlState();
         renderWheel();
-        renderStartInfo(nextOffset);
+        renderAdjusterInfo(nextOffset);
         previewStartOffset?.(nextOffset);
+        return;
+      }
+
+      if (knobState.activeControl === 'end') {
+        const nextEndTime = Number(
+          normalizeTrackEndTime(
+            knobState.dragStartValue - deltaY * DRAG_SECONDS_PER_PIXEL,
+            getCurrentTrackDuration(),
+            knobState.currentStartOffset
+          ).toFixed(3)
+        );
+
+        if (nextEndTime === knobState.currentEndTime) {
+          return;
+        }
+
+        knobState.currentEndTime = nextEndTime;
+        saveTrackEndTime(knobState.currentTrackKey, nextEndTime);
+        applyControlState();
+        renderWheel();
+        renderAdjusterInfo(knobState.currentStartOffset);
+        previewEndOffset?.(nextEndTime);
         return;
       }
 
@@ -410,6 +583,30 @@ export function createTrackRotationController({
         applyControlState();
         renderWheel();
         updateGainPreview();
+        return;
+      }
+
+      if (knobState.activeControl === 'repeat') {
+        const nextRepeatVisualValue = normalizeTrackRepeatVisualValue(
+          knobState.dragStartValue -
+            deltaY / REPEAT_WHEEL_SHIFT_PIXELS_PER_STEP
+        );
+        const nextRepeatCount = normalizeTrackRepeatCount(
+          nextRepeatVisualValue
+        );
+
+        knobState.currentRepeatVisualValue = nextRepeatVisualValue;
+        renderWheel();
+
+        if (nextRepeatCount === knobState.currentRepeatCount) {
+          return;
+        }
+
+        knobState.currentRepeatCount = nextRepeatCount;
+        saveTrackRepeatCount(knobState.currentTrackKey, nextRepeatCount);
+        onRepeatCountChange?.(knobState.currentTrackKey, nextRepeatCount);
+        applyControlState();
+        renderAdjusterInfo(knobState.currentStartOffset);
       }
     });
 
@@ -430,7 +627,7 @@ export function createTrackRotationController({
       if (
         !knobState.activeControl ||
         event.target.closest(
-          '#trackStartToggle, #trackGainToggle, #trackStartDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, #trackStartWheel'
+          '#trackStartToggle, #trackEndToggle, #trackGainToggle, #trackRepeatToggle, #trackStartDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, #trackStartWheel'
         )
       ) {
         return;

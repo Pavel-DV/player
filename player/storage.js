@@ -4,8 +4,11 @@ const PLAYLIST_STATES_KEY = 'playlistStates';
 const LEGACY_PLAYER_STATES_KEY = 'playerStates';
 const NORM_INFO_KEY = 'normInfo';
 const TRACK_START_INFO_KEY = 'trackStartInfo';
+const TRACK_END_TIME_INFO_KEY = 'trackEndTimeInfo';
+const LEGACY_TRACK_END_INFO_KEY = 'trackEndInfo';
 const TRACK_GAIN_INFO_KEY = 'trackGainInfo';
 const EXPLICIT_INFO_KEY = 'explicitInfo';
+const TRACK_REPEAT_INFO_KEY = 'trackRepeatInfo';
 
 function readJson(key, fallback, errorLabel) {
   try {
@@ -191,6 +194,42 @@ export function saveTrackStartTime(trackKey, offset) {
   );
 }
 
+export function loadTrackEndTime(trackKey) {
+  const allTrackEndInfo = readJson(
+    TRACK_END_TIME_INFO_KEY,
+    {},
+    'load track end time'
+  );
+  const value = allTrackEndInfo?.[trackKey];
+
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+export function saveTrackEndTime(trackKey, endTime) {
+  if (!trackKey) {
+    return false;
+  }
+
+  const allTrackEndInfo = readJson(
+    TRACK_END_TIME_INFO_KEY,
+    {},
+    'load track end time for save'
+  );
+  const nextEndTime = Number.isFinite(endTime) ? Math.max(0, endTime) : 0;
+
+  if (nextEndTime > 0) {
+    allTrackEndInfo[trackKey] = nextEndTime;
+  } else {
+    delete allTrackEndInfo[trackKey];
+  }
+
+  return writeJson(
+    TRACK_END_TIME_INFO_KEY,
+    allTrackEndInfo,
+    'save track end time'
+  );
+}
+
 export function loadTrackGain(trackKey) {
   const allTrackGainInfo = readJson(
     TRACK_GAIN_INFO_KEY,
@@ -252,11 +291,48 @@ export function saveExplicitInfo(trackKey, isExplicit) {
   return writeJson(EXPLICIT_INFO_KEY, allExplicitInfo, 'save explicit info');
 }
 
+export function loadTrackRepeatCount(trackKey) {
+  const allRepeatInfo = readJson(
+    TRACK_REPEAT_INFO_KEY,
+    {},
+    'load track repeat info'
+  );
+  const value = allRepeatInfo?.[trackKey];
+  const parsed = Number.isFinite(value) ? Math.floor(value) : NaN;
+
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+}
+
+export function saveTrackRepeatCount(trackKey, repeatCount) {
+  if (!trackKey) {
+    return false;
+  }
+
+  const allRepeatInfo = readJson(
+    TRACK_REPEAT_INFO_KEY,
+    {},
+    'load track repeat info for save'
+  );
+  const parsed = Number.isFinite(repeatCount) ? Math.floor(repeatCount) : NaN;
+  const nextCount = Number.isFinite(parsed) ? Math.max(1, parsed) : 1;
+
+  if (nextCount > 1) {
+    allRepeatInfo[trackKey] = nextCount;
+  } else {
+    delete allRepeatInfo[trackKey];
+  }
+
+  return writeJson(TRACK_REPEAT_INFO_KEY, allRepeatInfo, 'save track repeat info');
+}
+
 export function clearPlayerCache() {
   try {
     localStorage.removeItem(NORM_INFO_KEY);
     localStorage.removeItem(TRACK_START_INFO_KEY);
+    localStorage.removeItem(TRACK_END_TIME_INFO_KEY);
+    localStorage.removeItem(LEGACY_TRACK_END_INFO_KEY);
     localStorage.removeItem(TRACK_GAIN_INFO_KEY);
+    localStorage.removeItem(TRACK_REPEAT_INFO_KEY);
     localStorage.removeItem(PLAYLIST_STATES_KEY);
     localStorage.removeItem(LEGACY_PLAYER_STATES_KEY);
     return true;

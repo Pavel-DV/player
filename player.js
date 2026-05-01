@@ -15,15 +15,19 @@ import {
   loadPlaylistState,
   loadPlaylists,
   loadSettings,
+  loadTrackEndTime,
   loadTrackGain,
+  loadTrackRepeatCount,
   loadTrackStartTime,
   removePlaylistState,
   saveExplicitInfo,
+  saveTrackEndTime,
   saveTrackGain,
   saveNormInfo,
   savePlaylistState,
   savePlaylists,
   saveSettings,
+  saveTrackRepeatCount,
   saveTrackStartTime,
 } from './player/storage.js';
 import { createPlayerState } from './player/state.js';
@@ -39,7 +43,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '103';
+window.__playerBuildId = '113';
 console.log('Player build:', window.__playerBuildId);
 const buildVersionEl = document.getElementById('buildVersion');
 
@@ -188,6 +192,7 @@ const ui = createUiController({
   getDisplayName,
   getQueueIndices,
   extractMetadata: metadataReader.extractMetadata,
+  loadTrackRepeatCount,
   savePlaylists,
   loadPlaylistState,
   removePlaylistState,
@@ -224,7 +229,9 @@ playback = createPlaybackController({
   getDisplayName,
   getQueueIndices,
   loadNormInfo,
+  loadTrackEndTime,
   loadTrackGain,
+  loadTrackRepeatCount,
   loadTrackStartTime,
   saveNormInfo,
   saveSettings,
@@ -236,11 +243,21 @@ trackRotation = createTrackRotationController({
   state,
   getFileKey,
   loadNormInfo,
+  loadTrackEndTime,
   loadTrackGain,
+  loadTrackRepeatCount,
   loadTrackStartTime,
   recalculateTrackStartOffset: trackKey => normalization.reanalyzeTrack(trackKey),
+  saveTrackEndTime,
   saveTrackGain,
+  saveTrackRepeatCount,
   saveTrackStartTime,
+  onRepeatCountChange: (trackKey, repeatCount) => {
+    state.repeatTrackKey = trackKey;
+    state.repeatRemaining = Math.max(0, repeatCount - 1);
+    void ui.highlight();
+  },
+  previewEndOffset: offset => playback?.previewEndOffset(offset),
   previewStartOffset: offset => playback?.previewStartOffset(offset),
   previewTrackGain: options => playback?.applyVolumeForCurrentTrack(options),
 });

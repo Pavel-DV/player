@@ -141,7 +141,7 @@ export function getQueueIndices(state) {
       .map(key => state.fileIndexByKey.get(key))
       .filter(index => typeof index === 'number');
 
-    return indices;
+    return indices.filter((index, itemIndex) => index !== indices[itemIndex - 1]);
   }
 
   return state.files

@@ -14,6 +14,7 @@ export function createUiController({
   getDisplayName,
   getQueueIndices,
   extractMetadata,
+  loadTrackRepeatCount,
   savePlaylists,
   loadPlaylistState,
   removePlaylistState,
@@ -75,6 +76,12 @@ export function createUiController({
       dom.trackStartToggleEl.setAttribute('aria-expanded', 'false');
     }
 
+    if (dom.trackEndToggleEl) {
+      dom.trackEndToggleEl.disabled = true;
+      dom.trackEndToggleEl.classList.remove('on');
+      dom.trackEndToggleEl.setAttribute('aria-expanded', 'false');
+    }
+
     if (dom.trackGainToggleEl) {
       dom.trackGainToggleEl.disabled = true;
       dom.trackGainToggleEl.classList.remove('on');
@@ -98,7 +105,9 @@ export function createUiController({
 
     if (dom.trackAdjusterButtonsEl) {
       dom.trackAdjusterButtonsEl.classList.remove('start-mode');
+      dom.trackAdjusterButtonsEl.classList.remove('end-mode');
       dom.trackAdjusterButtonsEl.classList.remove('gain-mode');
+      dom.trackAdjusterButtonsEl.classList.remove('repeat-mode');
     }
 
     if (dom.trackStartWheelEl) {
@@ -111,6 +120,12 @@ export function createUiController({
       dom.explicitTrackToggleEl.disabled = true;
       dom.explicitTrackToggleEl.classList.remove('on');
       dom.explicitTrackToggleEl.setAttribute('aria-pressed', 'false');
+    }
+
+    if (dom.trackRepeatToggleEl) {
+      dom.trackRepeatToggleEl.disabled = true;
+      dom.trackRepeatToggleEl.classList.remove('on');
+      dom.trackRepeatToggleEl.setAttribute('aria-pressed', 'false');
     }
   }
 
@@ -311,6 +326,14 @@ export function createUiController({
         'aria-pressed',
         freshCurrentFile && isExplicit ? 'true' : 'false'
       );
+    }
+
+    if (dom.trackRepeatToggleEl) {
+      const repeatCount = currentTrackKey ? loadTrackRepeatCount?.(currentTrackKey) : 1;
+      const isRepeatOn = Boolean(freshCurrentFile && repeatCount > 1);
+      dom.trackRepeatToggleEl.disabled = !freshCurrentFile;
+      dom.trackRepeatToggleEl.classList.toggle('on', isRepeatOn);
+      dom.trackRepeatToggleEl.setAttribute('aria-pressed', isRepeatOn ? 'true' : 'false');
     }
 
     onNowPlayingMetadata?.(freshCurrentFile, metadata, playlistName);
