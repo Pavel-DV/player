@@ -56,15 +56,6 @@ export function createLibraryController({
     });
   }
 
-  function hasSameFileKeys(leftFiles, rightFiles) {
-    if (!Array.isArray(leftFiles) || leftFiles.length !== rightFiles.length) {
-      return false;
-    }
-
-    const rightKeys = new Set(rightFiles.map(file => getFileKey(file)));
-    return leftFiles.every(file => rightKeys.has(getFileKey(file)));
-  }
-
   function removeTrackKeyFromPlaylists(trackKey) {
     let changed = false;
 
@@ -202,19 +193,6 @@ export function createLibraryController({
       })
         .then(saved => {
           if (!saved || saveSequence !== state.opfsSaveSequence) {
-            return false;
-          }
-
-          return loadPersistedLibrary?.();
-        })
-        .then(persistedFiles => {
-          if (!persistedFiles || saveSequence !== state.opfsSaveSequence) {
-            return;
-          }
-
-          if (hasSameFileKeys(persistedFiles, nextFiles)) {
-            markLibraryPersisted(persistedFiles);
-            rebuildLibrary(persistedFiles);
             return;
           }
 
@@ -280,16 +258,9 @@ export function createLibraryController({
           return true;
         }
 
-        const persistedFiles = await loadPersistedLibrary?.();
-
-        if (
-          Array.isArray(persistedFiles) &&
-          persistedFiles.length === nextFiles.length
-        ) {
-          markLibraryPersisted(persistedFiles);
-          rebuildLibrary(persistedFiles);
-        }
-
+        markLibraryPersisted(nextFiles);
+        renderList();
+        void highlight();
         return true;
       } catch (error) {
         console.error('Failed to delete library track from OPFS:', error);
