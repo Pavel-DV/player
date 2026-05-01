@@ -361,7 +361,7 @@ export function createUiController({
     }
 
     const key = getFileKey(file);
-    playlist.items.push(key);
+    playlist.items.unshift(key);
     state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
     renderList();
@@ -387,7 +387,6 @@ export function createUiController({
       const key = getFileKey(file);
 
       if (!existingKeys.has(key)) {
-        playlist.items.push(key);
         existingKeys.add(key);
         newKeys.push(key);
       }
@@ -397,6 +396,7 @@ export function createUiController({
       return;
     }
 
+    playlist.items.unshift(...newKeys);
     state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
     renderList();
