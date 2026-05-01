@@ -1,4 +1,4 @@
-const BUILD_ID = '126';
+const BUILD_ID = '127';
 const CACHE_NAME = `player-v${BUILD_ID}`;
 const ASSETS = [
   '/',
@@ -19,12 +19,30 @@ const ASSETS = [
   '/player/ui.js'
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      Promise.all(ASSETS.map(asset => cache.add(new Request(asset, { cache: 'reload' }))))
-    )
+async function fetchFresh(asset) {
+  const url = new URL(asset, self.location.origin);
+  url.searchParams.set('sw-cache', Date.now());
+
+  const response = await fetch(url, { cache: 'no-store' });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update ${asset}: ${response.status}`);
+  }
+
+  return response;
+}
+
+async function updateCache() {
+  const cache = await caches.open(CACHE_NAME);
+  const responses = await Promise.all(ASSETS.map(fetchFresh));
+
+  await Promise.all(
+    ASSETS.map((asset, index) => cache.put(asset, responses[index].clone()))
   );
+}
+
+self.addEventListener('install', e => {
+  e.waitUntil(updateCache());
   self.skipWaiting();
 });
 
@@ -50,7 +68,12 @@ self.addEventListener('fetch', e => {
     }
 
     try {
-      const networkResponse = await fetch(new Request(e.request, { cache: 'reload' }));
+      const networkResponse = await fetch(e.request, { cache: 'no-store' });
+
+      if (!networkResponse.ok) {
+        throw new Error(`Failed to fetch ${url.pathname}: ${networkResponse.status}`);
+      }
+
       const cache = await caches.open(CACHE_NAME);
       await cache.put(e.request, networkResponse.clone());
       return networkResponse;
@@ -61,6 +84,22 @@ self.addEventListener('fetch', e => {
         return cachedResponse;
       }
 
+      throw error;
+    }
+  })());
+});
+
+self.addEventListener('message', e => {
+  if (e.data !== 'UPDATE_CACHE') {
+    return;
+  }
+
+  e.waitUntil((async () => {
+    try {
+      await updateCache();
+      e.ports[0]?.postMessage({ ok: true });
+    } catch (error) {
+      e.ports[0]?.postMessage({ ok: false, error: error.message });
       throw error;
     }
   })());

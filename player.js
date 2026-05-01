@@ -43,7 +43,7 @@ import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '137';
+window.__playerBuildId = '138';
 console.log('Player build:', window.__playerBuildId);
 const buildVersionEl = document.getElementById('buildVersion');
 

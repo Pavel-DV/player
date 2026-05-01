@@ -198,8 +198,25 @@ async function refreshApp() {
     try {
         const reg = await navigator.serviceWorker.getRegistration();
         await reg?.update();
+        const worker = navigator.serviceWorker.controller || reg?.active;
+
+        if (worker) {
+            await new Promise((resolve, reject) => {
+                const channel = new MessageChannel();
+
+                channel.port1.onmessage = event => {
+                    if (event.data?.ok) {
+                        resolve();
+                    } else {
+                        reject(new Error(event.data?.error || 'Failed to update cache'));
+                    }
+                };
+
+                worker.postMessage('UPDATE_CACHE', [channel.port2]);
+            });
+        }
     } catch (error) {
-        console.error('Failed to update service worker:', error);
+        console.error('Failed to update app cache:', error);
     }
 
     window.location.reload();
