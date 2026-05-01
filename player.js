@@ -37,13 +37,14 @@ import {
   getQueueIndices,
   isAudioFile,
 } from './player/shared.js';
+import { playerBuildId } from './player/build.js';
 import { createPlaybackController } from './player/playback.js';
 import { createTrackRotationController } from './player/track-rotation.js';
 import { createUiController } from './player/ui.js';
 
 const dom = getPlayerDom();
 const state = createPlayerState();
-window.__playerBuildId = '142';
+window.__playerBuildId = playerBuildId;
 console.log('Player build:', window.__playerBuildId);
 const buildVersionEl = document.getElementById('buildVersion');
 
