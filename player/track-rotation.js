@@ -340,10 +340,6 @@ export function createTrackRotationController({
   function sync(force = false) {
     const currentTrackKey = getCurrentTrackKey();
 
-    if (dom.trackArtworkEl) {
-      dom.trackArtworkEl.style.transform = '';
-    }
-
     if (dom.trackStartToggleEl) {
       dom.trackStartToggleEl.disabled = !currentTrackKey;
     }

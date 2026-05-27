@@ -4,28 +4,61 @@ const EMPTY_METADATA = Object.freeze({
   artwork: null,
 });
 
+function trimNullTerminator(text) {
+  return typeof text === 'string' ? text.replace(/\0.*$/, '') : '';
+}
+
+function decodeLatin1(bytes) {
+  // Avoid relying on TextDecoder('iso-8859-1') support differences.
+  let text = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    const b = bytes[i];
+    if (b === 0) break;
+    text += String.fromCharCode(b);
+  }
+  return text;
+}
+
 function readTextFrame(view, buffer, position, frameSize) {
   const encoding = view.getUint8(position);
 
-  if (encoding === 0 || encoding === 3) {
-    let text = '';
+  const bytes = new Uint8Array(buffer, position + 1, Math.max(0, frameSize - 1));
 
-    for (let index = position + 1; index < position + frameSize; index += 1) {
-      const code = view.getUint8(index);
-      if (code === 0) {
-        break;
-      }
-      text += String.fromCharCode(code);
+  if (encoding === 3) {
+    // ID3v2: encoding 3 = UTF-8
+    try {
+      return trimNullTerminator(new TextDecoder('utf-8').decode(bytes));
+    } catch {
+      return trimNullTerminator(decodeLatin1(bytes));
     }
+  }
 
-    return text;
+  if (encoding === 0) {
+    // ID3v2: encoding 0 = ISO-8859-1
+    return trimNullTerminator(decodeLatin1(bytes));
   }
 
   if (encoding === 1) {
-    const decoder = new TextDecoder('utf-16le');
-    return decoder
-      .decode(new Uint8Array(buffer, position + 3, frameSize - 3))
-      .replace(/\0.*$/, '');
+    // ID3v2: encoding 1 = UTF-16 with BOM (some tags omit BOM).
+    const bom1 = view.getUint8(position + 1);
+    const bom2 = view.getUint8(position + 2);
+    const hasBom = frameSize >= 3;
+    const useBigEndian = hasBom && bom1 === 0xfe && bom2 === 0xff;
+    const useLittleEndian = hasBom && bom1 === 0xff && bom2 === 0xfe;
+    const decoder = new TextDecoder(useBigEndian ? 'utf-16be' : 'utf-16le');
+    const start = position + (useBigEndian || useLittleEndian ? 3 : 1);
+    const len = Math.max(0, position + frameSize - start);
+    return trimNullTerminator(decoder.decode(new Uint8Array(buffer, start, len)));
+  }
+
+  if (encoding === 2) {
+    // ID3v2: encoding 2 = UTF-16BE without BOM
+    try {
+      return trimNullTerminator(new TextDecoder('utf-16be').decode(bytes));
+    } catch {
+      // If utf-16be isn't supported, fall back (best-effort) to utf-16le.
+      return trimNullTerminator(new TextDecoder('utf-16le').decode(bytes));
+    }
   }
 
   return '';

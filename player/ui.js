@@ -56,8 +56,8 @@ export function createUiController({
     }
 
     if (dom.trackArtworkEl) {
+      dom.trackArtworkEl.classList.remove('playing');
       dom.trackArtworkEl.style.display = 'none';
-      dom.trackArtworkEl.style.transform = '';
       dom.trackArtworkEl.removeAttribute('src');
     }
 
@@ -256,7 +256,21 @@ export function createUiController({
     actions.primeCurrentTrackSource?.();
   }
 
+  function syncArtworkPlaybackState() {
+    if (!dom.trackArtworkEl) {
+      return;
+    }
+
+    const currentFile = state.files[state.index];
+    dom.trackArtworkEl.classList.toggle(
+      'playing',
+      Boolean(currentFile && state.isPlaying)
+    );
+  }
+
   async function highlight() {
+    syncArtworkPlaybackState();
+
     if (dom.listEl) {
       [...dom.listEl.children].forEach(listItem => {
         const span = listItem.querySelector('span');
@@ -315,9 +329,10 @@ export function createUiController({
       if (freshCurrentFile) {
         dom.trackArtworkEl.src = metadata.artwork || buildDefaultArtwork();
         dom.trackArtworkEl.style.display = 'block';
+        syncArtworkPlaybackState();
       } else {
+        dom.trackArtworkEl.classList.remove('playing');
         dom.trackArtworkEl.style.display = 'none';
-        dom.trackArtworkEl.style.transform = '';
         dom.trackArtworkEl.removeAttribute('src');
       }
     }

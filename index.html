@@ -57,6 +57,8 @@ body[data-screen="2"] #screen2{z-index:2}body[data-screen="2"] #screen1{z-index:
 body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:1}body[data-screen="3"] #screen2{z-index:1}
 #trackArtworkRow{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px;min-height:140px}
 #trackArtwork{width:140px;height:140px;border-radius:8px;display:none;transform-origin:center;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#trackArtwork.playing{animation:track-artwork-spin 10s linear infinite}
+@keyframes track-artwork-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 #trackStartAdjuster{display:flex;align-items:flex-start;gap:10px;min-height:140px}
 #trackAdjusterButtons{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
 #trackTrimButtons{display:flex;align-items:center;gap:10px}
@@ -222,23 +224,9 @@ async function refreshApp() {
     window.location.reload();
 }
 
-let refreshingForNewWorker = false;
-
 window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-        .then(async reg => {
-            await reg.update();
-        })
         .catch(() => {});
-});
-
-navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshingForNewWorker) {
-        return;
-    }
-
-    refreshingForNewWorker = true;
-    window.location.reload();
 });
 </script>
 </body>
