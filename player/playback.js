@@ -1327,6 +1327,7 @@ export function createPlaybackController({
     tracePlayback('playback.pause', {
       offset: Number(state.offset.toFixed(3)),
     });
+    ui.syncArtworkPlaybackState();
     void ui.highlight();
     ui.updatePlaylistsButtons();
     savePlayerState();
@@ -1358,6 +1359,7 @@ export function createPlaybackController({
       return;
     }
 
+    ui.resetArtworkSpin();
     play();
   }
 
@@ -1597,6 +1599,7 @@ export function createPlaybackController({
     });
 
     if (shouldContinuePlaying) {
+      ui.resetArtworkSpin();
       play();
       return;
     }
@@ -1612,6 +1615,8 @@ export function createPlaybackController({
     const shouldContinuePlaying =
       state.isPlaying ||
       Boolean(dom.audioElement && !dom.audioElement.paused);
+
+    ui.resetArtworkSpin();
 
     tracePlayback('playback.prev.begin', {
       queueLength: queue.length,
@@ -1818,6 +1823,7 @@ export function createPlaybackController({
       state.pendingStartOffset = null;
       applyVolumeForCurrentTrack();
       state.isPlaying = true;
+      ui.syncArtworkPlaybackState();
       void ui.highlight();
       ui.updatePlaylistsButtons();
       syncMediaSession('audio.playing');
@@ -1832,6 +1838,7 @@ export function createPlaybackController({
       }
 
       state.isPlaying = false;
+      ui.syncArtworkPlaybackState();
       void ui.highlight();
       ui.updatePlaylistsButtons();
       savePlayerState();

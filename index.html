@@ -57,7 +57,8 @@ body[data-screen="2"] #screen2{z-index:2}body[data-screen="2"] #screen1{z-index:
 body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:1}body[data-screen="3"] #screen2{z-index:1}
 #trackArtworkRow{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px;min-height:140px}
 #trackArtwork{width:140px;height:140px;border-radius:8px;display:none;transform-origin:center;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-#trackArtwork.playing{animation:track-artwork-spin 10s linear infinite}
+#trackArtwork.spin{animation:track-artwork-spin 10s linear infinite;animation-play-state:paused}
+#trackArtwork.spin.running{animation-play-state:running}
 @keyframes track-artwork-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 #trackStartAdjuster{display:flex;align-items:flex-start;gap:10px;min-height:140px}
 #trackAdjusterButtons{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
@@ -137,7 +138,7 @@ rgba(255,255,255,.36) 23px 25px
 <div id=screen2>
     <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:12px 20px">
         <div id=trackArtworkRow>
-            <img id=trackArtwork draggable="false">
+            <img id=trackArtwork draggable="false" class="spin">
             <div id=trackStartAdjuster>
                 <div id=trackAdjusterButtons>
                     <div id=trackTrimButtons>
