@@ -539,6 +539,8 @@ export function createTrackRotationController({
         `rotate(${knobState.dragAngleDelta}rad)`;
 
       if (!knobState.activeControl) {
+        dom.audioElement.preservesPitch = false;
+        dom.audioElement.webkitPreservesPitch = false;
         dom.audioElement.playbackRate =
           angleDelta /
           Math.max(1, event.timeStamp - knobState.dragLastTime) /
