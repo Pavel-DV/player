@@ -1,7 +1,6 @@
 const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
 const ROTATE_SECONDS_PER_RADIAN = 1.8;
 const ROTATE_GAIN_PER_RADIAN = 0.45;
-const PLAYBACK_RATE_UPDATE_INTERVAL_MS = 80;
 const MAX_TRACK_GAIN = 4;
 const MIN_TRACK_GAIN = 0;
 const MAX_TRACK_REPEAT_COUNT = 999;
@@ -34,7 +33,6 @@ export function createTrackRotationController({
     currentStartOffset: 0,
     dragAngleDelta: 0,
     dragLastAngle: 0,
-    dragLastRateTime: 0,
     currentTrackKey: null,
     dragStartValue: 0,
     isActive: false,
@@ -503,7 +501,6 @@ export function createTrackRotationController({
       knobState.pointerId = event.pointerId;
       knobState.dragAngleDelta = 0;
       knobState.dragLastAngle = getPointerAngle(event);
-      knobState.dragLastRateTime = 0;
       knobState.dragStartValue =
         knobState.activeControl === 'gain'
           ? knobState.currentGain
@@ -539,17 +536,9 @@ export function createTrackRotationController({
         `rotate(${knobState.dragAngleDelta}rad)`;
 
       if (!knobState.activeControl) {
-        if (
-          event.timeStamp - knobState.dragLastRateTime <
-          PLAYBACK_RATE_UPDATE_INTERVAL_MS
-        ) {
-          return;
-        }
-
         dom.audioElement.preservesPitch = false;
         dom.audioElement.webkitPreservesPitch = false;
         dom.audioElement.playbackRate = angleDelta < 0 ? -2 : 2;
-        knobState.dragLastRateTime = event.timeStamp;
         armPlaybackRateStopTimer();
         return;
       }
