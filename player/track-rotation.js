@@ -34,7 +34,6 @@ export function createTrackRotationController({
     currentStartOffset: 0,
     dragAngleDelta: 0,
     dragLastAngle: 0,
-    dragLastTime: 0,
     dragLastRateTime: 0,
     currentTrackKey: null,
     dragStartValue: 0,
@@ -504,7 +503,6 @@ export function createTrackRotationController({
       knobState.pointerId = event.pointerId;
       knobState.dragAngleDelta = 0;
       knobState.dragLastAngle = getPointerAngle(event);
-      knobState.dragLastTime = event.timeStamp;
       knobState.dragLastRateTime = 0;
       knobState.dragStartValue =
         knobState.activeControl === 'gain'
@@ -551,7 +549,6 @@ export function createTrackRotationController({
         dom.audioElement.preservesPitch = false;
         dom.audioElement.webkitPreservesPitch = false;
         dom.audioElement.playbackRate = angleDelta < 0 ? -2 : 2;
-        knobState.dragLastTime = event.timeStamp;
         knobState.dragLastRateTime = event.timeStamp;
         armPlaybackRateStopTimer();
         return;
