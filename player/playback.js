@@ -1934,11 +1934,6 @@ export function createPlaybackController({
       tracePlayback('audio.event.canplay');
     });
 
-    dom.audioElement.addEventListener('ratechange', () => {
-      tracePlayback('audio.event.ratechange');
-      syncMediaSession('audio.ratechange');
-    });
-
     dom.audioElement.addEventListener('seeked', () => {
       tracePlayback('audio.event.seeked');
       state.offset = dom.audioElement.currentTime || 0;
