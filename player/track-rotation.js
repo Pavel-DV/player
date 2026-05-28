@@ -478,7 +478,7 @@ export function createTrackRotationController({
       knobState.currentGain = getDefaultTrackGain(knobState.currentTrackKey);
       saveTrackGain(knobState.currentTrackKey, null);
       applyControlState();
-      updateGainPreview();
+      previewTrackGain?.({ commit: true, forceVisible: true });
     });
 
     dom.trackGainUnityBtnEl.addEventListener('click', event => {
@@ -490,7 +490,7 @@ export function createTrackRotationController({
       knobState.currentGain = 1;
       saveTrackGain(knobState.currentTrackKey, 1);
       applyControlState();
-      updateGainPreview();
+      previewTrackGain?.({ commit: true, forceVisible: true });
     });
 
     dom.trackArtworkEl.addEventListener('pointerdown', event => {
@@ -644,6 +644,8 @@ export function createTrackRotationController({
       if (!knobState.activeControl) {
         window.clearTimeout(knobState.playbackRateStopTimer);
         dom.audioElement.playbackRate = 1;
+      } else if (knobState.activeControl === 'gain') {
+        previewTrackGain?.({ commit: true, forceVisible: true });
       }
       sync(true);
     };
