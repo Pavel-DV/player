@@ -114,12 +114,6 @@ export function createUiController({
       dom.trackAdjusterButtonsEl.classList.remove('repeat-mode');
     }
 
-    if (dom.trackStartWheelEl) {
-      dom.trackStartWheelEl.classList.remove('open');
-      dom.trackStartWheelEl.setAttribute('aria-hidden', 'true');
-      dom.trackStartWheelEl.style.removeProperty('--track-start-shift');
-    }
-
     if (dom.explicitTrackToggleEl) {
       dom.explicitTrackToggleEl.disabled = true;
       dom.explicitTrackToggleEl.classList.remove('on');

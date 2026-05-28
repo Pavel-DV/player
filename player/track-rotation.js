@@ -1,13 +1,10 @@
 const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
-const DRAG_SECONDS_PER_PIXEL = 0.04;
-const DRAG_GAIN_PER_PIXEL = 0.01;
+const ROTATE_SECONDS_PER_RADIAN = 1.8;
+const ROTATE_GAIN_PER_RADIAN = 0.45;
+const NORMAL_PLAYBACK_RADIANS_PER_MS = (Math.PI * 2) / 10000;
 const MAX_TRACK_GAIN = 4;
 const MIN_TRACK_GAIN = 0;
 const MAX_TRACK_REPEAT_COUNT = 999;
-const START_WHEEL_SHIFT_PIXELS_PER_SECOND = 24;
-const END_WHEEL_SHIFT_PIXELS_PER_SECOND = 24;
-const GAIN_WHEEL_SHIFT_PIXELS_PER_UNIT = 100;
-const REPEAT_WHEEL_SHIFT_PIXELS_PER_STEP = 24;
 
 export function createTrackRotationController({
   dom,
@@ -35,11 +32,14 @@ export function createTrackRotationController({
     currentRepeatCount: 1,
     currentRepeatVisualValue: 1,
     currentStartOffset: 0,
+    dragAngleDelta: 0,
+    dragLastAngle: 0,
+    dragLastTime: 0,
     currentTrackKey: null,
     dragStartValue: 0,
-    dragStartY: 0,
     isActive: false,
     pointerId: null,
+    playbackRateStopTimer: null,
   };
 
   function getCurrentTrackFile() {
@@ -122,6 +122,33 @@ export function createTrackRotationController({
     return Math.min(MAX_TRACK_REPEAT_COUNT, Math.max(1, repeatCount));
   }
 
+  function getPointerAngle(event) {
+    const rect = dom.trackArtworkEl.getBoundingClientRect();
+    return Math.atan2(
+      event.clientY - (rect.top + rect.height / 2),
+      event.clientX - (rect.left + rect.width / 2)
+    );
+  }
+
+  function getAngleDelta(angle, startAngle) {
+    let delta = angle - startAngle;
+
+    if (delta > Math.PI) {
+      delta -= Math.PI * 2;
+    } else if (delta < -Math.PI) {
+      delta += Math.PI * 2;
+    }
+
+    return delta;
+  }
+
+  function armPlaybackRateStopTimer() {
+    window.clearTimeout(knobState.playbackRateStopTimer);
+    knobState.playbackRateStopTimer = window.setTimeout(() => {
+      dom.audioElement.playbackRate = 0;
+    }, 120);
+  }
+
   function getDerivedTrackGain(trackKey) {
     const gainOverride = loadTrackGain(trackKey);
 
@@ -163,32 +190,6 @@ export function createTrackRotationController({
     startOffset = knobState.currentStartOffset
   ) {
     return normalizeTrackEndTime(endTime, duration, startOffset);
-  }
-
-  function renderWheel() {
-    if (!dom.trackStartWheelEl) {
-      return;
-    }
-
-    let shift = 0;
-
-    if (knobState.activeControl === 'start') {
-      shift =
-        knobState.currentStartOffset * START_WHEEL_SHIFT_PIXELS_PER_SECOND;
-    } else if (knobState.activeControl === 'end') {
-      shift =
-        getEffectiveTrackEndTime() * END_WHEEL_SHIFT_PIXELS_PER_SECOND;
-    } else if (knobState.activeControl === 'gain') {
-      shift = knobState.currentGain * GAIN_WHEEL_SHIFT_PIXELS_PER_UNIT;
-    } else if (knobState.activeControl === 'repeat') {
-      shift =
-        knobState.currentRepeatVisualValue * REPEAT_WHEEL_SHIFT_PIXELS_PER_STEP;
-    }
-
-    dom.trackStartWheelEl.style.setProperty(
-      '--track-start-shift',
-      `${Number((-shift).toFixed(3))}px`
-    );
   }
 
   function renderAdjusterInfo(offset) {
@@ -310,16 +311,10 @@ export function createTrackRotationController({
       );
     }
 
-    if (dom.trackStartWheelEl) {
-      dom.trackStartWheelEl.classList.toggle(
-        'open',
-        Boolean(knobState.activeControl)
-      );
-      dom.trackStartWheelEl.setAttribute(
-        'aria-hidden',
-        knobState.activeControl ? 'false' : 'true'
-      );
-    }
+    dom.trackArtworkEl.classList.toggle(
+      'adjusting',
+      Boolean(knobState.activeControl)
+    );
   }
 
   function updateGainPreview() {
@@ -332,7 +327,6 @@ export function createTrackRotationController({
     knobState.activeControl =
       nextControl && knobState.currentTrackKey ? nextControl : null;
     applyControlState();
-    renderWheel();
     renderAdjusterInfo(knobState.currentStartOffset);
     updateGainPreview();
   }
@@ -378,7 +372,6 @@ export function createTrackRotationController({
       knobState.isActive = false;
       knobState.pointerId = null;
       setActiveControl(null);
-      renderWheel();
       renderAdjusterInfo(0);
       return;
     }
@@ -411,7 +404,6 @@ export function createTrackRotationController({
     }
 
     applyControlState();
-    renderWheel();
     renderAdjusterInfo(knobState.currentStartOffset);
     updateGainPreview();
   }
@@ -426,7 +418,7 @@ export function createTrackRotationController({
       !dom.trackEndDefaultBtnEl ||
       !dom.trackGainDefaultBtnEl ||
       !dom.trackGainUnityBtnEl ||
-      !dom.trackStartWheelEl
+      !dom.trackArtworkEl
     ) {
       return;
     }
@@ -461,7 +453,6 @@ export function createTrackRotationController({
         getCurrentTrackDuration()
       );
       applyControlState();
-      renderWheel();
       renderAdjusterInfo(knobState.currentStartOffset);
       previewStartOffset?.(knobState.currentStartOffset);
     });
@@ -475,7 +466,6 @@ export function createTrackRotationController({
       knobState.currentEndTime = 0;
       saveTrackEndTime(knobState.currentTrackKey, 0);
       applyControlState();
-      renderWheel();
       renderAdjusterInfo(knobState.currentStartOffset);
     });
 
@@ -488,7 +478,6 @@ export function createTrackRotationController({
       knobState.currentGain = getDefaultTrackGain(knobState.currentTrackKey);
       saveTrackGain(knobState.currentTrackKey, null);
       applyControlState();
-      renderWheel();
       updateGainPreview();
     });
 
@@ -501,19 +490,20 @@ export function createTrackRotationController({
       knobState.currentGain = 1;
       saveTrackGain(knobState.currentTrackKey, 1);
       applyControlState();
-      renderWheel();
       updateGainPreview();
     });
 
-    dom.trackStartWheelEl.addEventListener('pointerdown', event => {
-      if (!knobState.activeControl || !knobState.currentTrackKey) {
+    dom.trackArtworkEl.addEventListener('pointerdown', event => {
+      if ((!knobState.activeControl && !state.isPlaying) || !knobState.currentTrackKey) {
         return;
       }
 
       event.preventDefault();
       knobState.isActive = true;
       knobState.pointerId = event.pointerId;
-      knobState.dragStartY = event.clientY;
+      knobState.dragAngleDelta = 0;
+      knobState.dragLastAngle = getPointerAngle(event);
+      knobState.dragLastTime = event.timeStamp;
       knobState.dragStartValue =
         knobState.activeControl === 'gain'
           ? knobState.currentGain
@@ -522,23 +512,47 @@ export function createTrackRotationController({
             : knobState.activeControl === 'end'
               ? getEffectiveTrackEndTime()
             : knobState.currentStartOffset;
-      dom.trackStartWheelEl.setPointerCapture(event.pointerId);
+      dom.trackArtworkEl.classList.add('adjusting');
+      dom.trackArtworkEl.style.transform = 'rotate(0rad)';
+      dom.trackArtworkEl.setPointerCapture(event.pointerId);
+      if (!knobState.activeControl) {
+        armPlaybackRateStopTimer();
+      }
       renderAdjusterInfo(knobState.currentStartOffset);
       updateGainPreview();
     });
 
-    dom.trackStartWheelEl.addEventListener('pointermove', event => {
+    dom.trackArtworkEl.addEventListener('pointermove', event => {
       if (!knobState.isActive || event.pointerId !== knobState.pointerId) {
         return;
       }
 
       event.preventDefault();
-      const deltaY = event.clientY - knobState.dragStartY;
+      const pointerAngle = getPointerAngle(event);
+      const angleDelta = getAngleDelta(
+        pointerAngle,
+        knobState.dragLastAngle
+      );
+      knobState.dragAngleDelta += angleDelta;
+      knobState.dragLastAngle = pointerAngle;
+      dom.trackArtworkEl.style.transform =
+        `rotate(${knobState.dragAngleDelta}rad)`;
+
+      if (!knobState.activeControl) {
+        dom.audioElement.playbackRate =
+          angleDelta /
+          Math.max(1, event.timeStamp - knobState.dragLastTime) /
+          NORMAL_PLAYBACK_RADIANS_PER_MS;
+        knobState.dragLastTime = event.timeStamp;
+        armPlaybackRateStopTimer();
+        return;
+      }
 
       if (knobState.activeControl === 'start') {
         const nextOffset = Number(
           normalizeTrackStartOffset(
-            knobState.dragStartValue - deltaY * DRAG_SECONDS_PER_PIXEL,
+            knobState.dragStartValue +
+              knobState.dragAngleDelta * ROTATE_SECONDS_PER_RADIAN,
             getCurrentTrackDuration()
           ).toFixed(3)
         );
@@ -550,7 +564,6 @@ export function createTrackRotationController({
         knobState.currentStartOffset = nextOffset;
         saveTrackStartTime(knobState.currentTrackKey, nextOffset);
         applyControlState();
-        renderWheel();
         renderAdjusterInfo(nextOffset);
         previewStartOffset?.(nextOffset);
         return;
@@ -559,7 +572,8 @@ export function createTrackRotationController({
       if (knobState.activeControl === 'end') {
         const nextEndTime = Number(
           normalizeTrackEndTime(
-            knobState.dragStartValue - deltaY * DRAG_SECONDS_PER_PIXEL,
+            knobState.dragStartValue +
+              knobState.dragAngleDelta * ROTATE_SECONDS_PER_RADIAN,
             getCurrentTrackDuration(),
             knobState.currentStartOffset
           ).toFixed(3)
@@ -572,7 +586,6 @@ export function createTrackRotationController({
         knobState.currentEndTime = nextEndTime;
         saveTrackEndTime(knobState.currentTrackKey, nextEndTime);
         applyControlState();
-        renderWheel();
         renderAdjusterInfo(knobState.currentStartOffset);
         previewEndOffset?.(nextEndTime);
         return;
@@ -581,7 +594,8 @@ export function createTrackRotationController({
       if (knobState.activeControl === 'gain') {
         const nextGain = Number(
           normalizeTrackGain(
-            knobState.dragStartValue - deltaY * DRAG_GAIN_PER_PIXEL
+            knobState.dragStartValue +
+              knobState.dragAngleDelta * ROTATE_GAIN_PER_RADIAN
           ).toFixed(2)
         );
 
@@ -592,22 +606,19 @@ export function createTrackRotationController({
         knobState.currentGain = nextGain;
         saveTrackGain(knobState.currentTrackKey, nextGain);
         applyControlState();
-        renderWheel();
         updateGainPreview();
         return;
       }
 
       if (knobState.activeControl === 'repeat') {
         const nextRepeatVisualValue = normalizeTrackRepeatVisualValue(
-          knobState.dragStartValue -
-            deltaY / REPEAT_WHEEL_SHIFT_PIXELS_PER_STEP
+          knobState.dragStartValue + knobState.dragAngleDelta
         );
         const nextRepeatCount = normalizeTrackRepeatCount(
           nextRepeatVisualValue
         );
 
         knobState.currentRepeatVisualValue = nextRepeatVisualValue;
-        renderWheel();
 
         if (nextRepeatCount === knobState.currentRepeatCount) {
           return;
@@ -628,17 +639,21 @@ export function createTrackRotationController({
 
       knobState.isActive = false;
       knobState.pointerId = null;
+      if (!knobState.activeControl) {
+        window.clearTimeout(knobState.playbackRateStopTimer);
+        dom.audioElement.playbackRate = 1;
+      }
       sync(true);
     };
 
-    dom.trackStartWheelEl.addEventListener('pointerup', endDrag);
-    dom.trackStartWheelEl.addEventListener('pointercancel', endDrag);
+    dom.trackArtworkEl.addEventListener('pointerup', endDrag);
+    dom.trackArtworkEl.addEventListener('pointercancel', endDrag);
 
     document.addEventListener('pointerdown', event => {
       if (
         !knobState.activeControl ||
         event.target.closest(
-          '#trackStartToggle, #trackEndToggle, #trackGainToggle, #trackRepeatToggle, #trackStartDefaultBtn, #trackEndDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, #trackStartWheel'
+          '#trackStartToggle, #trackEndToggle, #trackGainToggle, #trackRepeatToggle, #trackStartDefaultBtn, #trackEndDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, #trackArtwork'
         )
       ) {
         return;

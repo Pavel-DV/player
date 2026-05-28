@@ -56,9 +56,10 @@ body[data-screen="1"] #screen1{z-index:2}body[data-screen="1"] #screen2{z-index:
 body[data-screen="2"] #screen2{z-index:2}body[data-screen="2"] #screen1{z-index:1}body[data-screen="2"] #screen3{z-index:1}
 body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:1}body[data-screen="3"] #screen2{z-index:1}
 #trackArtworkRow{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px;min-height:140px}
-#trackArtwork{width:140px;height:140px;border-radius:8px;display:none;transform-origin:center;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#trackArtwork{width:140px;height:140px;border-radius:8px;display:none;transform-origin:center;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
 #trackArtwork.spin{animation:track-artwork-spin 10s linear infinite;animation-play-state:paused}
 #trackArtwork.spin.running{animation-play-state:running}
+#trackArtwork.spin.adjusting{animation:none}
 @keyframes track-artwork-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 #trackStartAdjuster{display:flex;align-items:flex-start;gap:10px;min-height:140px}
 #trackAdjusterButtons{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
@@ -98,17 +99,6 @@ body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:
 #trackStartToggle:disabled,#trackEndToggle:disabled,#trackGainToggle:disabled,#trackStartDefaultBtn:disabled,#trackEndDefaultBtn:disabled,#trackGainDefaultBtn:disabled,#trackGainUnityBtn:disabled{opacity:.35}
 #gainInfo,#trackStartInfo{color:#666;font-size:13px;transition:color .15s ease,font-size .15s ease}
 #gainInfo.active,#trackStartInfo.active{color:#f2f2f2;font-size:16px}
-#trackStartWheel{--track-start-shift:0px;position:relative;display:none;width:42px;height:140px;border-radius:21px;border:1px solid rgba(255,255,255,.12);overflow:hidden;touch-action:none;background:
-linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.2)),
-repeating-linear-gradient(
-to bottom,
-transparent 0 11px,
-rgba(255,255,255,.14) 11px 12px,
-transparent 12px 23px,
-rgba(255,255,255,.36) 23px 25px
-);background-position:0 0,center var(--track-start-shift);background-repeat:no-repeat,repeat-y;background-size:100% 100%,calc(100% - 14px) 24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),inset 0 -1px 0 rgba(0,0,0,.25)}
-#trackStartWheel::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#222 0,rgba(34,34,34,.15) 18%,rgba(34,34,34,.15) 82%,#222 100%);pointer-events:none}
-#trackStartWheel.open{display:block}
 #audioElement{width:calc(100% / 1.53);margin:0 auto 20px;display:block;transform:scale(1.53);transform-origin:center}
 @media (orientation: landscape){
 #trackArtwork{display:none!important}
@@ -142,18 +132,17 @@ rgba(255,255,255,.36) 23px 25px
             <div id=trackStartAdjuster>
                 <div id=trackAdjusterButtons>
                     <div id=trackTrimButtons>
-                        <button id=trackStartToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Adjust track start time"><span class=dim>]</span><span>[</span></button>
-                        <button id=trackEndToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Adjust track end offset"><span>]</span><span class=dim>[</span></button>
+                        <button id=trackStartToggle type=button aria-controls=trackArtwork aria-expanded=false aria-label="Adjust track start time"><span class=dim>]</span><span>[</span></button>
+                        <button id=trackEndToggle type=button aria-controls=trackArtwork aria-expanded=false aria-label="Adjust track end offset"><span>]</span><span class=dim>[</span></button>
                     </div>
-                    <button id=trackGainToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Adjust track gain">&#x266A;</button>
+                    <button id=trackGainToggle type=button aria-controls=trackArtwork aria-expanded=false aria-label="Adjust track gain">&#x266A;</button>
                     <button id=explicitTrackToggle type=button aria-label="Toggle explicit for current track" aria-pressed="false">E</button>
-                    <button id=trackRepeatToggle type=button aria-controls=trackStartWheel aria-expanded=false aria-label="Edit repeat count for current track" aria-pressed="false">&#x21BA;</button>
+                    <button id=trackRepeatToggle type=button aria-controls=trackArtwork aria-expanded=false aria-label="Edit repeat count for current track" aria-pressed="false">&#x21BA;</button>
                     <button id=trackStartDefaultBtn type=button aria-label="Recalculate start time">&#x21BB;</button>
                     <button id=trackEndDefaultBtn type=button aria-label="Reset end offset">&times;</button>
                     <button id=trackGainDefaultBtn type=button aria-label="Restore automatic gain">&#x21BB;</button>
                     <button id=trackGainUnityBtn type=button aria-label="Set gain to 1.00x">1.0</button>
                 </div>
-                <div id=trackStartWheel aria-hidden=true></div>
             </div>
         </div>
         <h1 id=trackTitle style="margin:0;font-size:22px">&mdash;</h1>
