@@ -1,8 +1,6 @@
 const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
 const ROTATE_SECONDS_PER_RADIAN = 1.8;
 const ROTATE_GAIN_PER_RADIAN = 0.45;
-const NORMAL_PLAYBACK_RADIANS_PER_MS = (Math.PI * 2) / 10000;
-const PLAYBACK_RATE_STEPS = [0.5, 1, 1.25, 1.5, 2];
 const PLAYBACK_RATE_UPDATE_INTERVAL_MS = 80;
 const MAX_TRACK_GAIN = 4;
 const MIN_TRACK_GAIN = 0;
@@ -150,14 +148,6 @@ export function createTrackRotationController({
     knobState.playbackRateStopTimer = window.setTimeout(() => {
       dom.audioElement.playbackRate = 0.5;
     }, 120);
-  }
-
-  function quantizePlaybackRate(rate) {
-    return PLAYBACK_RATE_STEPS.reduce((closestRate, step) =>
-      Math.abs(step - rate) < Math.abs(closestRate - rate)
-        ? step
-        : closestRate
-    );
   }
 
   function getDerivedTrackGain(trackKey) {
@@ -558,15 +548,9 @@ export function createTrackRotationController({
           return;
         }
 
-        const nextPlaybackRate =
-          angleDelta /
-          Math.max(1, event.timeStamp - knobState.dragLastTime) /
-          NORMAL_PLAYBACK_RADIANS_PER_MS;
         dom.audioElement.preservesPitch = false;
         dom.audioElement.webkitPreservesPitch = false;
-        dom.audioElement.playbackRate = quantizePlaybackRate(
-          Math.abs(nextPlaybackRate)
-        );
+        dom.audioElement.playbackRate = angleDelta < 0 ? -2 : 2;
         knobState.dragLastTime = event.timeStamp;
         knobState.dragLastRateTime = event.timeStamp;
         armPlaybackRateStopTimer();
