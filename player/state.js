@@ -16,7 +16,6 @@ export function createPlayerState() {
     suppressAutoNextUntil: 0,
     suppressAutoNextTrackKey: null,
     playSequence: 0,
-    pendingPlaySequence: 0,
     shuffle: false,
     normalize: false,
     allowExplicit: true,

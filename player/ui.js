@@ -592,7 +592,7 @@ export function createUiController({
       title.style.lineHeight = '1.2';
       title.onclick = () => {
         if (itemIndex === state.index && state.isPlaying) {
-          actions.pauseSoft();
+          actions.pause();
         } else {
           actions.startTrack(itemIndex);
         }

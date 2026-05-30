@@ -1,5 +1,4 @@
 const AUDIO_FILE_PATTERN = /\.(mp3|m4a|wav|ogg|flac)$/i;
-export const RESUME_DELAY_MS = 10;
 const fileKeyOverrides = new WeakMap();
 let cachedDefaultArtwork = null;
 

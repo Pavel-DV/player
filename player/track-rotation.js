@@ -538,7 +538,7 @@ export function createTrackRotationController({
       if (!knobState.activeControl) {
         dom.audioElement.preservesPitch = false;
         dom.audioElement.webkitPreservesPitch = false;
-        dom.audioElement.playbackRate = angleDelta < 0 ? -2 : 2;
+        dom.audioElement.playbackRate = angleDelta < 0 ? -4 : 4;
         armPlaybackRateStopTimer();
         return;
       }

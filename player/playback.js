@@ -1,5 +1,4 @@
 import {
-  RESUME_DELAY_MS,
   buildDefaultArtwork,
   getPlaylistItemOrder,
   setFileKey,
@@ -27,18 +26,6 @@ function getMinTrackEndTime(duration, startOffset = 0) {
   );
 }
 
-function setMediaSessionPlaybackState(state) {
-  if (!('mediaSession' in navigator)) {
-    return;
-  }
-
-  try {
-    navigator.mediaSession.playbackState = state;
-  } catch (error) {
-    console.error('Failed to update Media Session playback state:', error);
-  }
-}
-
 export function createPlaybackController({
   state,
   dom,
@@ -62,7 +49,7 @@ export function createPlaybackController({
   let cachedNormalizedMultiplier = 1;
   let cachedNormalizedTrackKey = null;
   let hasLoggedPlaybackAudioSessionReady = false;
-  let lastEndedHandlerSequenceId = null;
+  let pauseAfterPlaybackStart = false;
 
   function isTrackAllowed(trackKey) {
     return state.allowExplicit || !state.explicitTrackKeys.has(trackKey);
@@ -462,12 +449,16 @@ export function createPlaybackController({
 
     safeSetHandler('previoustrack', () => {
       tracePlayback('mediaSession.action.previoustrack');
-      prev();
+      prev({
+        pauseAfterStart: !state.isPlaying && Boolean(dom.audioElement?.paused),
+      });
     });
 
     safeSetHandler('nexttrack', () => {
       tracePlayback('mediaSession.action.nexttrack');
-      next();
+      next({
+        pauseAfterStart: !state.isPlaying && Boolean(dom.audioElement?.paused),
+      });
     });
 
     safeSetHandler('stop', () => {
@@ -835,7 +826,6 @@ export function createPlaybackController({
       return Promise.resolve(false);
     }
 
-    state.pendingPlaySequence = sequenceId;
     tracePlayback('playForSequence.begin', {
       errorLabel,
       sequenceId,
@@ -851,7 +841,7 @@ export function createPlaybackController({
       })
       .catch(error => {
         const isAbortError = error?.name === 'AbortError';
-        const isSuperseded = state.pendingPlaySequence !== sequenceId;
+        const isSuperseded = state.playSequence !== sequenceId;
 
         if (!isAbortError || !isSuperseded) {
           console.error(errorLabel, error);
@@ -864,6 +854,10 @@ export function createPlaybackController({
           isSuperseded,
           sequenceId,
         });
+
+        if (!isSuperseded) {
+          pauseAfterPlaybackStart = false;
+        }
 
         return false;
       });
@@ -1032,13 +1026,6 @@ export function createPlaybackController({
       });
   }
 
-  function restoreCurrentTrackSource() {
-    return reloadCurrentTrackSource({
-      reason: 'restoreCurrentTrackSource',
-      resumePlayback: false,
-    });
-  }
-
   function primeCurrentTrackSource() {
     const file = state.files[state.index];
 
@@ -1109,10 +1096,6 @@ export function createPlaybackController({
       return;
     }
 
-    if (lastEndedHandlerSequenceId === sequenceId) {
-      return;
-    }
-
     dom.audioElement.onended = () => {
       clearPreviewEndTarget();
       tracePlayback('audio.onended', {
@@ -1131,7 +1114,6 @@ export function createPlaybackController({
 
       state.isPlaying = false;
       state.offset = 0;
-      setMediaSessionPlaybackState('paused');
       void ui.highlight();
 
       const currentFile = state.files[state.index];
@@ -1173,27 +1155,36 @@ export function createPlaybackController({
       next({ continuePlayback: true });
     };
 
-    lastEndedHandlerSequenceId = sequenceId;
     tracePlayback('audio.onended.bound', {
       sequenceId,
       source,
     });
   }
 
-  function kill() {
-    tracePlayback('playback.kill.begin');
+  function cancelPlaybackRequest() {
     state.isPlaying = false;
     state.pendingStartOffset = null;
     clearPreviewEndTarget();
-    state.pendingPlaySequence = ++state.playSequence;
+    state.playSequence += 1;
 
     if (dom.audioElement) {
       state.isInternalTransition = true;
+    }
+  }
+
+  function clearAudioSource() {
+    if (dom.audioElement) {
       dom.audioElement.pause();
       dom.audioElement.src = '';
     }
 
     revokeCurrentObjectUrl();
+  }
+
+  function kill() {
+    tracePlayback('playback.kill.begin');
+    cancelPlaybackRequest();
+    clearAudioSource();
     tracePlayback('playback.kill.end');
   }
 
@@ -1342,24 +1333,6 @@ export function createPlaybackController({
           trackKey: getFileKey(file),
         });
       });
-  }
-
-  function pauseSoft() {
-    if (!dom.audioElement) {
-      return;
-    }
-
-    dom.audioElement.pause();
-    state.offset = dom.audioElement.currentTime || 0;
-    state.pendingStartOffset = null;
-    clearPreviewEndTarget();
-    tracePlayback('playback.pauseSoft', {
-      offset: Number(state.offset.toFixed(3)),
-    });
-
-    window.setTimeout(() => {
-      restoreCurrentTrackSource();
-    }, RESUME_DELAY_MS);
   }
 
   function pause() {
@@ -1607,15 +1580,17 @@ export function createPlaybackController({
     return direction === 'prev' ? queue[queue.length - 1] : queue[0];
   }
 
-  function next({ continuePlayback = false } = {}) {
+  function next({ continuePlayback = false, pauseAfterStart = false } = {}) {
     const queue = getQueueIndices(state);
     const shouldContinuePlaying =
       continuePlayback ||
+      pauseAfterStart ||
       state.isPlaying ||
       Boolean(dom.audioElement && !dom.audioElement.paused);
 
     tracePlayback('playback.next.begin', {
       continuePlayback,
+      pauseAfterStart,
       queueLength: queue.length,
       shouldContinuePlaying,
     });
@@ -1637,7 +1612,7 @@ export function createPlaybackController({
       return;
     }
 
-    kill();
+    cancelPlaybackRequest();
     state.index = nextIndex;
     state.offset = 0;
     syncRepeatForCurrentTrack({ force: true });
@@ -1646,8 +1621,11 @@ export function createPlaybackController({
       queue,
     });
 
+    pauseAfterPlaybackStart = false;
+
     if (shouldContinuePlaying) {
       ui.resetArtworkSpin();
+      pauseAfterPlaybackStart = pauseAfterStart;
       play();
       return;
     }
@@ -1658,15 +1636,17 @@ export function createPlaybackController({
     savePlayerState();
   }
 
-  function prev() {
+  function prev({ pauseAfterStart = false } = {}) {
     const queue = getQueueIndices(state);
     const shouldContinuePlaying =
+      pauseAfterStart ||
       state.isPlaying ||
       Boolean(dom.audioElement && !dom.audioElement.paused);
 
     ui.resetArtworkSpin();
 
     tracePlayback('playback.prev.begin', {
+      pauseAfterStart,
       queueLength: queue.length,
       shouldContinuePlaying,
     });
@@ -1728,7 +1708,7 @@ export function createPlaybackController({
       return;
     }
 
-    kill();
+    cancelPlaybackRequest();
     state.index = previousIndex;
     state.offset = 0;
     syncRepeatForCurrentTrack({ force: true });
@@ -1737,7 +1717,10 @@ export function createPlaybackController({
       queue,
     });
 
+    pauseAfterPlaybackStart = false;
+
     if (shouldContinuePlaying) {
+      pauseAfterPlaybackStart = pauseAfterStart;
       play();
       return;
     }
@@ -1878,6 +1861,12 @@ export function createPlaybackController({
       void ui.highlight();
       ui.updatePlaylistsButtons();
       syncMediaSession('audio.playing');
+
+      if (pauseAfterPlaybackStart) {
+        tracePlayback('audio.event.playing.pause-after-media-action');
+        pauseAfterPlaybackStart = false;
+        pause();
+      }
     });
 
     dom.audioElement.addEventListener('pause', () => {
@@ -2059,7 +2048,6 @@ export function createPlaybackController({
     kill,
     next,
     pause,
-    pauseSoft,
     play,
     previewEndOffset,
     prev,

@@ -214,7 +214,6 @@ const ui = createUiController({
   actions: {
     kill: () => playback?.kill(),
     pause: () => playback?.pause(),
-    pauseSoft: () => playback?.pauseSoft(),
     play: () => playback?.play(),
     primeCurrentTrackSource: () => playback?.primeCurrentTrackSource(),
     removeFromLibrary: trackIndex => library.removeTrackFromLibrary(trackIndex),
@@ -269,7 +268,7 @@ trackRotation.bind();
 if (dom.trackTitleEl) {
   dom.trackTitleEl.onclick = () => {
     if (state.isPlaying) {
-      playback.pauseSoft();
+      playback.pause();
     } else if (state.files[state.index]) {
       playback.play();
     }
