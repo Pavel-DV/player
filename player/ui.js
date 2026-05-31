@@ -24,6 +24,7 @@ export function createUiController({
   actions,
 }) {
   const playlistButtons = new Map();
+  let librarySearchQuery = '';
 
   function getCurrentPlaylist() {
     return (
@@ -529,6 +530,7 @@ export function createUiController({
     const currentPlaylist = getCurrentPlaylist();
     const playlistItems = new Set(currentPlaylist?.items ?? []);
     const orderedEntries = [];
+    const normalizedSearchQuery = librarySearchQuery.trim().toLowerCase();
 
     state.files.forEach((file, itemIndex) => {
       const key = getFileKey(file);
@@ -556,6 +558,18 @@ export function createUiController({
     orderedEntries.forEach(({ file, itemIndex }) => {
       const key = getFileKey(file);
       const libraryLabel = getDisplayName(key) || file?.name || key || 'Untitled track';
+
+      if (
+        normalizedSearchQuery &&
+        ![libraryLabel, file?.name, key]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(normalizedSearchQuery)
+      ) {
+        return;
+      }
+
       const isPersistedToOpfs = state.opfsPersistedTrackKeys.has(key);
       const isPendingOpfsSave = state.opfsPendingTrackKeys.has(key);
       const listItem = document.createElement('li');
@@ -630,6 +644,12 @@ export function createUiController({
       listItem.appendChild(opfsDeleteButton);
       dom.listEl.appendChild(listItem);
     });
+  }
+
+  function setLibrarySearch(query) {
+    librarySearchQuery = query || '';
+    renderList();
+    void highlight();
   }
 
   function renderPlaylists() {
@@ -780,6 +800,7 @@ export function createUiController({
     renderPlaylists,
     resetArtworkSpin,
     restoreCurrentPlaylistTrack,
+    setLibrarySearch,
     syncArtworkPlaybackState,
     updatePlaylistsButtons,
   };

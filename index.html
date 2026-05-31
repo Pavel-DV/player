@@ -35,6 +35,9 @@ body{margin:0;position:fixed;width:100%;height:100%}
 #trackRepeatToggle.on{background:transparent;color:#23fd23}
 /* scrollable lists */
 #filelistwrapper,#playlistswrapper{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+#librarySearch{box-sizing:border-box;width:calc(100% - 16px);height:36px;margin:0 8px 8px;padding:0 12px;border:1px solid #3a3a3a;border-radius:8px;background:#151515;color:#e0e0e0;font:16px -apple-system,BlinkMacSystemFont;outline:none}
+#librarySearch::placeholder{color:#777}
+#librarySearch:focus{border-color:#23fd23}
 button{padding:0;font-size:20px;width:52px;height:52px;background:#333;color:#e0e0e0;border:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;line-height:1}
 #screen2 button[onclick*="prev"],#screen2 button[onclick*="next"]{width:73px;height:73px;font-size:0;position:relative;background:transparent;border-radius:0}
 #screen2 button[onclick*="prev"]::before,#screen2 button[onclick*="next"]::before{content:"";display:block;width:50px;height:50px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}
@@ -118,6 +121,7 @@ body[data-screen="3"] #screen3{z-index:2}body[data-screen="3"] #screen1{z-index:
 </div>
     <input id=dir type=file webkitdirectory multiple style="display:none">
     <div id="filelistwrapper">
+        <input id=librarySearch type=search placeholder="Search library" autocapitalize=none autocomplete=off spellcheck=false oninput="player.setLibrarySearch(this.value)">
         <div id=emptyLibraryMsg style="padding:20px;text-align:center;color:#999;font-size:14px;line-height:1.5">
             Tap + to add music files.<br>All playlists use files from this library.<br><b>Note:</b> files are saved on this device and restore after reload.
         </div>

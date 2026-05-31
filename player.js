@@ -374,6 +374,7 @@ window.player = {
   pickMusicDirectory: library.pickMusicDirectory,
   play: playback.play,
   prev: playback.prev,
+  setLibrarySearch: ui.setLibrarySearch,
   toggleNormalize: playback.toggleNormalize,
   toggleAllowExplicit: playback.toggleAllowExplicit,
   toggleShuffle: playback.toggleShuffle,
