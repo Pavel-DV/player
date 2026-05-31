@@ -378,7 +378,7 @@ export function createUiController({
     const file = state.files[fileIndex];
 
     if (!file) {
-      console.error(`Cannot add missing file at index ${fileIndex}`);
+      console.error('Cannot add missing file at index ' + fileIndex)
       return;
     }
 
