@@ -21,6 +21,7 @@ function analyzePeak(audioBuffer) {
 
 const SILENCE_THRESHOLD = 0.0025;
 const MIN_NON_SILENT_DURATION_SECONDS = 0.02;
+const START_DETECTION_WINDOW_SECONDS = 0.005;
 const MIN_AUTO_START_OFFSET_SECONDS = 0.05;
 
 function analyzeLeadingStartOffset(audioBuffer) {
@@ -29,9 +30,14 @@ function analyzeLeadingStartOffset(audioBuffer) {
     1,
     Math.floor(sampleRate * MIN_NON_SILENT_DURATION_SECONDS)
   );
+  const windowSamples = Math.max(
+    1,
+    Math.floor(sampleRate * START_DETECTION_WINDOW_SECONDS)
+  );
   const totalSamples = audioBuffer.length;
   const channelDataByIndex = [];
   let consecutiveSamples = 0;
+  let startSampleIndex = 0;
 
   for (
     let channelIndex = 0;
@@ -41,7 +47,12 @@ function analyzeLeadingStartOffset(audioBuffer) {
     channelDataByIndex.push(audioBuffer.getChannelData(channelIndex));
   }
 
-  for (let sampleIndex = 0; sampleIndex < totalSamples; sampleIndex += 1) {
+  for (
+    let sampleIndex = 0;
+    sampleIndex < totalSamples;
+    sampleIndex += windowSamples
+  ) {
+    const endSampleIndex = Math.min(totalSamples, sampleIndex + windowSamples);
     let maxAbsoluteSample = 0;
 
     for (
@@ -49,18 +60,29 @@ function analyzeLeadingStartOffset(audioBuffer) {
       channelIndex < channelDataByIndex.length;
       channelIndex += 1
     ) {
-      const absoluteSample = Math.abs(channelDataByIndex[channelIndex][sampleIndex]);
+      const channelData = channelDataByIndex[channelIndex];
 
-      if (absoluteSample > maxAbsoluteSample) {
-        maxAbsoluteSample = absoluteSample;
+      for (
+        let windowSampleIndex = sampleIndex;
+        windowSampleIndex < endSampleIndex;
+        windowSampleIndex += 1
+      ) {
+        const absoluteSample = Math.abs(channelData[windowSampleIndex]);
+
+        if (absoluteSample > maxAbsoluteSample) {
+          maxAbsoluteSample = absoluteSample;
+        }
       }
     }
 
     if (maxAbsoluteSample >= SILENCE_THRESHOLD) {
-      consecutiveSamples += 1;
+      if (consecutiveSamples === 0) {
+        startSampleIndex = sampleIndex;
+      }
+
+      consecutiveSamples += endSampleIndex - sampleIndex;
 
       if (consecutiveSamples >= minConsecutiveSamples) {
-        const startSampleIndex = sampleIndex - consecutiveSamples + 1;
         return Math.max(0, startSampleIndex / sampleRate);
       }
     } else {
