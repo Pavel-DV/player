@@ -37,6 +37,27 @@ export function createUiController({
     return getCurrentPlaylist()?.name?.trim() ?? '';
   }
 
+  function normalizePlaylistItems(items) {
+    const seenKeys = new Set();
+    const seenFileIndices = new Set();
+
+    return (items ?? []).filter(key => {
+      const fileIndex = state.fileIndexByKey.get(key);
+
+      if (
+        typeof fileIndex !== 'number' ||
+        seenKeys.has(key) ||
+        seenFileIndices.has(fileIndex)
+      ) {
+        return false;
+      }
+
+      seenKeys.add(key);
+      seenFileIndices.add(fileIndex);
+      return true;
+    });
+  }
+
   function renderCurrentPlaylistName() {
     if (!dom.currentPlaylistNameEl) {
       return;
@@ -369,7 +390,10 @@ export function createUiController({
     }
 
     const key = getFileKey(file);
-    playlist.items.unshift(key);
+    playlist.items = [
+      key,
+      ...normalizePlaylistItems(playlist.items).filter(item => item !== key),
+    ];
     state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
     renderList();
@@ -388,6 +412,7 @@ export function createUiController({
       return;
     }
 
+    playlist.items = normalizePlaylistItems(playlist.items);
     const existingKeys = new Set(playlist.items);
     const newKeys = [];
 
@@ -428,19 +453,12 @@ export function createUiController({
     }
 
     const key = getFileKey(file);
-    const indexToRemove = playlist.items.indexOf(key);
-
-    if (indexToRemove === -1) {
-      console.warn(`Track "${key}" is not in the current playlist`);
-      return;
-    }
-
     const removingCurrentTrack =
       key === (state.files[state.index] ? getFileKey(state.files[state.index]) : null);
     const queueBeforeRemoval = removingCurrentTrack ? getQueueIndices(state) : [];
     const resumePlayback = removingCurrentTrack && state.isPlaying;
 
-    playlist.items.splice(indexToRemove, 1);
+    playlist.items = normalizePlaylistItems(playlist.items).filter(item => item !== key);
     state.shuffledPlaylistItemsById.delete(playlist.id);
     savePlaylists(state.playlists, state.currentPlaylistId);
 
@@ -510,8 +528,6 @@ export function createUiController({
 
     const currentPlaylist = getCurrentPlaylist();
     const playlistItems = new Set(currentPlaylist?.items ?? []);
-    const displayedKeys = new Set();
-    const displayedFileIndices = new Set();
     const orderedEntries = [];
 
     state.files.forEach((file, itemIndex) => {
@@ -521,24 +537,16 @@ export function createUiController({
         return;
       }
 
-      displayedKeys.add(key);
-      displayedFileIndices.add(itemIndex);
       orderedEntries.push({ file, itemIndex });
     });
 
     (currentPlaylist?.items ?? []).forEach(key => {
       const fileIndex = state.fileIndexByKey.get(key);
 
-      if (!key || typeof fileIndex !== 'number') {
+      if (typeof fileIndex !== 'number') {
         return;
       }
 
-      if (displayedKeys.has(key) || displayedFileIndices.has(fileIndex)) {
-        return;
-      }
-
-      displayedKeys.add(key);
-      displayedFileIndices.add(fileIndex);
       orderedEntries.push({
         file: state.files[fileIndex],
         itemIndex: fileIndex,

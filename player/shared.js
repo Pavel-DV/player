@@ -135,13 +135,12 @@ export function getQueueIndices(state) {
   const canPlayTrack = trackKey => state.allowExplicit || !isTrackExplicit(state, trackKey);
 
   if (playlist && Array.isArray(playlist.items) && playlist.items.length > 0) {
-    const allPlaylistItems = getPlaylistItemOrder(state, playlist.id)
-    const canPlayItems = allPlaylistItems.filter(canPlayTrack)
+    const playlistItemsOrder = getPlaylistItemOrder(state, playlist.id)
+    const canPlayItems = playlistItemsOrder.filter(canPlayTrack)
     const fileIndexes = canPlayItems.map(key => state.fileIndexByKey.get(key))
     const fileIndexesNumbersOnly = fileIndexes.filter(index => typeof index === 'number')
-    const fileIndexesUnique = fileIndexesNumbersOnly.filter((index, itemIndex) => index !== fileIndexesNumbersOnly[itemIndex - 1])
 
-    return fileIndexesUnique
+    return fileIndexesNumbersOnly
   }
 
   return state.files
