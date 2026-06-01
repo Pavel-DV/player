@@ -49,6 +49,7 @@ export function createPlaybackController({
   let cachedNormalizedMultiplier = 1;
   let cachedNormalizedTrackKey = null;
   let hasLoggedPlaybackAudioSessionReady = false;
+  let mediaSessionRevision = 0;
   let pauseAfterPlaybackStart = false;
 
   function isTrackAllowed(trackKey) {
@@ -241,13 +242,16 @@ export function createPlaybackController({
 
     const trackKey = getFileKey(file);
     const artworkSource = metadata.artwork || buildDefaultArtwork();
+    const artworkSessionSource = `${artworkSource}${
+      artworkSource.includes('#') ? '&' : '#'
+    }ms=${mediaSessionRevision}`;
     const artworkType = artworkSource.match(/^data:([^;,]+)/)?.[1] ?? null;
     const mediaMetadataPayload = {
       album: playlistName,
       artist: metadata.artist || playlistName,
       artwork: [
         {
-          src: artworkSource,
+          src: artworkSessionSource,
           sizes: '512x512',
           ...(artworkType ? { type: artworkType } : {}),
         },
@@ -259,7 +263,7 @@ export function createPlaybackController({
       title: mediaMetadataPayload.title,
       artist: mediaMetadataPayload.artist,
       album: mediaMetadataPayload.album,
-      artworkSource,
+      artworkSessionSource,
     });
 
     if (state.mediaSessionSignature === mediaSessionSignature) {
@@ -274,6 +278,7 @@ export function createPlaybackController({
     navigator.mediaSession.metadata = new MediaMetadata(mediaMetadataPayload);
     tracePlayback('mediaSession.metadata.updated', {
       artist: mediaMetadataPayload.artist,
+      mediaSessionRevision,
       source,
       title: mediaMetadataPayload.title,
       trackKey,
@@ -1112,7 +1117,6 @@ export function createPlaybackController({
         return;
       }
 
-      state.isPlaying = false;
       state.offset = 0;
       void ui.highlight();
 
@@ -1146,13 +1150,14 @@ export function createPlaybackController({
           remaining: state.repeatRemaining,
           trackKey: currentTrackKey,
         });
+        state.isPlaying = false;
         play();
         return;
       }
 
       state.repeatTrackKey = null;
       state.repeatRemaining = null;
-      next({ continuePlayback: true });
+      next();
     };
 
     tracePlayback('audio.onended.bound', {
@@ -1260,6 +1265,7 @@ export function createPlaybackController({
       trackKey: getFileKey(file),
     });
 
+    mediaSessionRevision += 1;
     syncMediaMetadata(
       file,
       {
@@ -1303,6 +1309,7 @@ export function createPlaybackController({
     }
 
     const sequenceId = ++state.playSequence;
+    const requestedOffset = state.offset;
     void buildPreparedSource(file)
       .then(source => {
         if (sequenceId !== state.playSequence || !dom.audioElement) {
@@ -1316,7 +1323,7 @@ export function createPlaybackController({
         }
 
         setAudioSource(source);
-        state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
+        state.pendingStartOffset = getStartOffsetForPlayback(file, requestedOffset);
         tracePlayback('playback.play.new-source', {
           pendingStartOffset: state.pendingStartOffset,
           sequenceId,
@@ -1580,16 +1587,14 @@ export function createPlaybackController({
     return direction === 'prev' ? queue[queue.length - 1] : queue[0];
   }
 
-  function next({ continuePlayback = false, pauseAfterStart = false } = {}) {
+  function next({ pauseAfterStart = false } = {}) {
     const queue = getQueueIndices(state);
     const shouldContinuePlaying =
-      continuePlayback ||
       pauseAfterStart ||
       state.isPlaying ||
       Boolean(dom.audioElement && !dom.audioElement.paused);
 
     tracePlayback('playback.next.begin', {
-      continuePlayback,
       pauseAfterStart,
       queueLength: queue.length,
       shouldContinuePlaying,
