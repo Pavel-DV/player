@@ -206,9 +206,9 @@ export function createPlaybackController({
     }
 
     try {
-      navigator.mediaSession.playbackState = dom.audioElement.paused
-        ? 'paused'
-        : 'playing';
+      navigator.mediaSession.playbackState = state.isPlaying
+        ? 'playing'
+        : 'paused';
       tracePlayback('mediaSession.playbackState.updated', {
         playbackState: navigator.mediaSession.playbackState,
         reason,
@@ -859,90 +859,6 @@ export function createPlaybackController({
       });
   }
 
-  function playWhenSourceReady(sequenceId, errorLabel) {
-    if (!dom.audioElement) {
-      return;
-    }
-
-    let hasStarted = false;
-    let timeoutId = null;
-    tracePlayback('playWhenSourceReady.begin', {
-      errorLabel,
-      sequenceId,
-    });
-
-    const clearStartTimeout = () => {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-    };
-
-    const startPlayback = () => {
-      if (hasStarted) {
-        tracePlayback('playWhenSourceReady.start.skipped', {
-          reason: 'already-started',
-          sequenceId,
-        });
-        return;
-      }
-
-      hasStarted = true;
-      clearStartTimeout();
-      dom.audioElement?.removeEventListener('loadedmetadata', handleReady);
-      dom.audioElement?.removeEventListener('canplay', handleReady);
-
-      if (sequenceId !== state.playSequence) {
-        tracePlayback('playWhenSourceReady.start.skipped', {
-          reason: 'sequence-mismatch',
-          sequenceId,
-          statePlaySequence: state.playSequence,
-        });
-        return;
-      }
-
-      tracePlayback('playWhenSourceReady.start', {
-        sequenceId,
-      });
-      void playForSequence(sequenceId, errorLabel);
-    };
-
-    const handleReady = readyEvent => {
-      tracePlayback('playWhenSourceReady.ready', {
-        eventType: readyEvent?.type ?? 'unknown',
-        sequenceId,
-      });
-      window.setTimeout(startPlayback, 0);
-    };
-
-    if (dom.audioElement.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      tracePlayback('playWhenSourceReady.immediate', {
-        readyState: dom.audioElement.readyState,
-        sequenceId,
-      });
-      window.setTimeout(startPlayback, 0);
-      return;
-    }
-
-    dom.audioElement.addEventListener('loadedmetadata', handleReady, {
-      once: true,
-    });
-    dom.audioElement.addEventListener('canplay', handleReady, {
-      once: true,
-    });
-    dom.audioElement.load();
-    tracePlayback('playWhenSourceReady.load.called', {
-      sequenceId,
-    });
-    timeoutId = window.setTimeout(() => {
-      timeoutId = null;
-      tracePlayback('playWhenSourceReady.timeout', {
-        sequenceId,
-      });
-      startPlayback();
-    }, 250);
-  }
-
   function setAudioSource(file, { markInternalTransition = true } = {}) {
     if (!dom.audioElement) {
       return;
@@ -1006,7 +922,7 @@ export function createPlaybackController({
         if (resumePlayback) {
           const sequenceId = ++state.playSequence;
           bindEndedHandler(sequenceId, 'audio.source.reload.resume');
-          playWhenSourceReady(sequenceId, 'Failed to resume playback after reload:');
+          void playForSequence(sequenceId, 'Failed to resume playback after reload:');
         }
 
         return true;
@@ -1158,7 +1074,6 @@ export function createPlaybackController({
   }
 
   function cancelPlaybackRequest() {
-    state.isPlaying = false;
     state.pendingStartOffset = null;
     clearPreviewEndTarget();
     state.playSequence += 1;
@@ -1179,6 +1094,7 @@ export function createPlaybackController({
 
   function kill() {
     tracePlayback('playback.kill.begin');
+    state.isPlaying = false;
     cancelPlaybackRequest();
     clearAudioSource();
     tracePlayback('playback.kill.end');
@@ -1215,9 +1131,25 @@ export function createPlaybackController({
   }
 
   function play() {
-    if (state.isPlaying || !dom.audioElement) {
+    if (!dom.audioElement) {
       tracePlayback('playback.play.skipped', {
         hasAudioElement: Boolean(dom.audioElement),
+        isPlaying: state.isPlaying,
+      });
+      return;
+    }
+
+    const file = state.files[state.index];
+    const trackKey = file ? getFileKey(file) : null;
+    const alreadyPlayingCurrentSource =
+      state.isPlaying &&
+      trackKey &&
+      currentSourceTrackKey === trackKey &&
+      currentSourceNormalize === state.normalize;
+
+    if (alreadyPlayingCurrentSource) {
+      tracePlayback('playback.play.skipped', {
+        hasAudioElement: true,
         isPlaying: state.isPlaying,
       });
       return;
@@ -1227,8 +1159,6 @@ export function createPlaybackController({
     ensurePlaybackAudioSession('playback.play');
     // Keep this on each play path; one-time setup caused lock-screen track buttons to disappear.
     setupMediaSessionHandlers();
-
-    const file = state.files[state.index];
 
     if (!file) {
       console.error(`Cannot play because there is no file at index ${state.index}`);
@@ -1321,7 +1251,7 @@ export function createPlaybackController({
           trackKey: getFileKey(file),
         });
         bindEndedHandler(sequenceId, 'playback.play.new-source');
-        playWhenSourceReady(sequenceId, 'Failed to start playback:');
+        void playForSequence(sequenceId, 'Failed to start playback:');
       })
       .catch(error => {
         console.error('Failed to prepare playback source:', error);
