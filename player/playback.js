@@ -1186,18 +1186,6 @@ export function createPlaybackController({
       trackKey: getFileKey(file),
     });
 
-    mediaSessionRevision += 1;
-    syncMediaMetadata(
-      file,
-      {
-        title: getDisplayName(getFileKey(file)),
-        artist: null,
-        artwork: null,
-      },
-      getCurrentPlaylistName(),
-      'playback.play.fallback'
-    );
-
     const hasBlobSource =
       dom.audioElement.src && dom.audioElement.src.startsWith('blob:');
     const canResumeExistingSource =
@@ -1228,6 +1216,18 @@ export function createPlaybackController({
       void playForSequence(state.playSequence, 'Failed to resume playback:');
       return;
     }
+
+    mediaSessionRevision += 1;
+    syncMediaMetadata(
+      file,
+      {
+        title: getDisplayName(getFileKey(file)),
+        artist: null,
+        artwork: null,
+      },
+      getCurrentPlaylistName(),
+      'playback.play.fallback'
+    );
 
     const sequenceId = ++state.playSequence;
     const requestedOffset = state.offset;
