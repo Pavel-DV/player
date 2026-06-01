@@ -50,7 +50,6 @@ export function createPlaybackController({
   let cachedNormalizedTrackKey = null;
   let hasLoggedPlaybackAudioSessionReady = false;
   let mediaSessionRevision = 0;
-  let pauseAfterPlaybackStart = false;
 
   function isTrackAllowed(trackKey) {
     return state.allowExplicit || !state.explicitTrackKeys.has(trackKey);
@@ -454,16 +453,12 @@ export function createPlaybackController({
 
     safeSetHandler('previoustrack', () => {
       tracePlayback('mediaSession.action.previoustrack');
-      prev({
-        pauseAfterStart: !state.isPlaying && Boolean(dom.audioElement?.paused),
-      });
+      prev();
     });
 
     safeSetHandler('nexttrack', () => {
       tracePlayback('mediaSession.action.nexttrack');
-      next({
-        pauseAfterStart: !state.isPlaying && Boolean(dom.audioElement?.paused),
-      });
+      next();
     });
 
     safeSetHandler('stop', () => {
@@ -859,10 +854,6 @@ export function createPlaybackController({
           isSuperseded,
           sequenceId,
         });
-
-        if (!isSuperseded) {
-          pauseAfterPlaybackStart = false;
-        }
 
         return false;
       });
@@ -1587,15 +1578,13 @@ export function createPlaybackController({
     return direction === 'prev' ? queue[queue.length - 1] : queue[0];
   }
 
-  function next({ pauseAfterStart = false } = {}) {
+  function next() {
     const queue = getQueueIndices(state);
     const shouldContinuePlaying =
-      pauseAfterStart ||
       state.isPlaying ||
       Boolean(dom.audioElement && !dom.audioElement.paused);
 
     tracePlayback('playback.next.begin', {
-      pauseAfterStart,
       queueLength: queue.length,
       shouldContinuePlaying,
     });
@@ -1626,11 +1615,8 @@ export function createPlaybackController({
       queue,
     });
 
-    pauseAfterPlaybackStart = false;
-
     if (shouldContinuePlaying) {
       ui.resetArtworkSpin();
-      pauseAfterPlaybackStart = pauseAfterStart;
       play();
       return;
     }
@@ -1641,17 +1627,15 @@ export function createPlaybackController({
     savePlayerState();
   }
 
-  function prev({ pauseAfterStart = false } = {}) {
+  function prev() {
     const queue = getQueueIndices(state);
     const shouldContinuePlaying =
-      pauseAfterStart ||
       state.isPlaying ||
       Boolean(dom.audioElement && !dom.audioElement.paused);
 
     ui.resetArtworkSpin();
 
     tracePlayback('playback.prev.begin', {
-      pauseAfterStart,
       queueLength: queue.length,
       shouldContinuePlaying,
     });
@@ -1722,10 +1706,7 @@ export function createPlaybackController({
       queue,
     });
 
-    pauseAfterPlaybackStart = false;
-
     if (shouldContinuePlaying) {
-      pauseAfterPlaybackStart = pauseAfterStart;
       play();
       return;
     }
@@ -1867,11 +1848,6 @@ export function createPlaybackController({
       ui.updatePlaylistsButtons();
       syncMediaSession('audio.playing');
 
-      if (pauseAfterPlaybackStart) {
-        tracePlayback('audio.event.playing.pause-after-media-action');
-        pauseAfterPlaybackStart = false;
-        pause();
-      }
     });
 
     dom.audioElement.addEventListener('pause', () => {

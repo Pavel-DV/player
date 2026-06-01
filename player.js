@@ -200,15 +200,7 @@ const ui = createUiController({
   savePlayerState: saveCurrentPlayerState,
   queueTracksForAnalysis: trackKeys => normalization.queueTracksForAnalysis(trackKeys),
   onNowPlayingMetadata: (file, metadata, playlistName) => {
-    const shouldSyncMediaMetadata =
-      state.isPlaying ||
-      state.isInternalTransition ||
-      Boolean(dom.audioElement && !dom.audioElement.paused && dom.audioElement.src);
-
-    if (shouldSyncMediaMetadata) {
-      playback?.syncMediaMetadata(file, metadata, playlistName, 'ui.highlight');
-    }
-
+    playback?.syncMediaMetadata(file, metadata, playlistName, 'ui.highlight');
     trackRotation.sync();
   },
   actions: {
