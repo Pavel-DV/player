@@ -859,6 +859,34 @@ export function createPlaybackController({
       });
   }
 
+  function resumeCurrentSourceOrReload(file, sequenceId, errorLabel, fallbackReason) {
+    return playForSequence(sequenceId, errorLabel).then(didStartPlayback => {
+      const trackKey = file ? getFileKey(file) : null;
+      const isStillCurrentSource =
+        trackKey &&
+        sequenceId === state.playSequence &&
+        currentSourceTrackKey === trackKey &&
+        currentSourceNormalize === state.normalize;
+
+      if (didStartPlayback || !isStillCurrentSource) {
+        return didStartPlayback;
+      }
+
+      state.offset = dom.audioElement.currentTime || state.offset || 0;
+      tracePlayback('playback.play.resume-existing-source.reload', {
+        fallbackReason,
+        offset: Number(state.offset.toFixed(3)),
+        sequenceId,
+        trackKey,
+      });
+
+      return reloadCurrentTrackSource({
+        reason: fallbackReason,
+        resumePlayback: true,
+      });
+    });
+  }
+
   function setAudioSource(file, { markInternalTransition = true } = {}) {
     if (!dom.audioElement) {
       return;
@@ -1213,7 +1241,12 @@ export function createPlaybackController({
         });
       }
 
-      void playForSequence(state.playSequence, 'Failed to resume playback:');
+      void resumeCurrentSourceOrReload(
+        file,
+        state.playSequence,
+        'Failed to resume playback:',
+        'resumeExistingSourceFailed'
+      );
       return;
     }
 
@@ -1934,12 +1967,16 @@ export function createPlaybackController({
         persistPlaybackPosition();
       }
 
-      if (state.isPlaying) {
+      const hasPlayableSource =
+        Boolean(dom.audioElement.src) && dom.audioElement.src !== window.location.href;
+
+      if (state.isPlaying || hasPlayableSource) {
         ensurePlaybackAudioSession(
           document.hidden
             ? 'document.visibilitychange.hidden'
             : 'document.visibilitychange.visible'
         );
+        setupMediaSessionHandlers();
         syncMediaSession(
           document.hidden
             ? 'document.visibilitychange.hidden'
