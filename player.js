@@ -1,5 +1,5 @@
 import { getPlayerDom } from './player/dom.js';
-import { bindDeveloperLog } from './player/log.js';
+import { bindDeveloperLog, clearDeveloperLog } from './player/log.js';
 import { createLibraryController } from './player/library.js';
 import { createMetadataReader } from './player/metadata.js';
 import { createScreenNavigator } from './player/navigation.js';
@@ -47,6 +47,11 @@ const dom = getPlayerDom();
 const state = createPlayerState();
 window.__playerBuildId = playerBuildId;
 bindDeveloperLog(dom.developerLogEl);
+
+if (dom.clearDeveloperLogBtn) {
+  dom.clearDeveloperLogBtn.onclick = clearDeveloperLog;
+}
+
 console.log('Player build:', window.__playerBuildId);
 const buildVersionEl = document.getElementById('buildVersion');
 

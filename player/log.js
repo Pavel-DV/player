@@ -25,6 +25,11 @@ function emitLogEntry(entry) {
   listeners.forEach(listener => listener(logEntries));
 }
 
+export function clearDeveloperLog() {
+  logEntries.length = 0;
+  listeners.forEach(listener => listener(logEntries));
+}
+
 function installConsoleLogCapture() {
   if (installed) {
     return;

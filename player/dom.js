@@ -33,5 +33,6 @@ export function getPlayerDom() {
       document.getElementById('screen4'),
     ].filter(Boolean),
     developerLogEl: document.getElementById('developerLog'),
+    clearDeveloperLogBtn: document.getElementById('clearDeveloperLogBtn'),
   };
 }

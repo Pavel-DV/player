@@ -425,19 +425,21 @@ export function createPlaybackController({
       }
     };
 
-    const logMediaSessionAction = action => event => {
-      tracePlayback(`mediaSession.action.${action}`, {
-        fastSeek: event?.fastSeek ?? null,
-        seekOffset:
-          typeof event?.seekOffset === 'number'
-            ? Number(event.seekOffset.toFixed(3))
-            : null,
-        seekTime:
-          typeof event?.seekTime === 'number'
-            ? Number(event.seekTime.toFixed(3))
-            : null,
-      });
+    const safeClearHandler = action => {
+      try {
+        navigator.mediaSession.setActionHandler(action, null);
+        tracePlayback('mediaSession.handler.cleared', { action });
+      } catch (error) {
+        tracePlayback('mediaSession.handler.clear-failed', {
+          action,
+          error: summarizeError(error),
+        });
+      }
     };
+
+    safeClearHandler('seekbackward');
+    safeClearHandler('seekforward');
+    safeClearHandler('skipad');
 
     safeSetHandler('play', () => {
       tracePlayback('mediaSession.action.play');
@@ -458,12 +460,6 @@ export function createPlaybackController({
       tracePlayback('mediaSession.action.nexttrack');
       next();
     });
-
-    safeSetHandler('seekbackward', logMediaSessionAction('seekbackward'));
-    safeSetHandler('seekforward', logMediaSessionAction('seekforward'));
-    safeSetHandler('skipad', logMediaSessionAction('skipad'));
-    safeSetHandler('shuffle', logMediaSessionAction('shuffle'));
-    safeSetHandler('repeat', logMediaSessionAction('repeat'));
 
     safeSetHandler('stop', () => {
       tracePlayback('mediaSession.action.stop');
