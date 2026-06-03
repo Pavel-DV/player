@@ -30,6 +30,8 @@ export function getPlayerDom() {
       document.getElementById('screen1'),
       document.getElementById('screen2'),
       document.getElementById('screen3'),
+      document.getElementById('screen4'),
     ].filter(Boolean),
+    developerLogEl: document.getElementById('developerLog'),
   };
 }

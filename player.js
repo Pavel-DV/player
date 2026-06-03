@@ -1,4 +1,5 @@
 import { getPlayerDom } from './player/dom.js';
+import { bindDeveloperLog } from './player/log.js';
 import { createLibraryController } from './player/library.js';
 import { createMetadataReader } from './player/metadata.js';
 import { createScreenNavigator } from './player/navigation.js';
@@ -45,6 +46,7 @@ import { createUiController } from './player/ui.js';
 const dom = getPlayerDom();
 const state = createPlayerState();
 window.__playerBuildId = playerBuildId;
+bindDeveloperLog(dom.developerLogEl);
 console.log('Player build:', window.__playerBuildId);
 const buildVersionEl = document.getElementById('buildVersion');
 
@@ -227,7 +229,6 @@ playback = createPlaybackController({
   loadTrackStartTime,
   saveNormInfo,
   saveSettings,
-  saveTrackRepeatCount,
   savePlayerState: saveCurrentPlayerState,
 });
 
@@ -349,6 +350,7 @@ ui.renderList();
 void ui.highlight();
 
 playback.bindAudioEvents();
+playback.bindKeyboardEvents();
 playback.bindVisibilityEvents();
 navigation.bindTouchNavigation();
 

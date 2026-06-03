@@ -60,7 +60,7 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
     }
 
     state.touchScrollable = event.target.closest(
-      '#filelistwrapper, #playlistswrapper'
+      '#filelistwrapper, #playlistswrapper, #developerLogWrapper'
     );
     screens.forEach(screen => screen?.classList.remove('animate'));
   }

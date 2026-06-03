@@ -40,7 +40,6 @@ export function createPlaybackController({
   loadTrackStartTime,
   saveNormInfo,
   saveSettings,
-  saveTrackRepeatCount,
   savePlayerState,
 }) {
   let lastTimeupdateTraceAt = 0;
@@ -376,28 +375,6 @@ export function createPlaybackController({
     state.repeatRemaining = Math.max(0, (Number.isFinite(repeatCount) ? repeatCount : 1) - 1);
   }
 
-  function toggleCurrentTrackRepeat() {
-    const file = state.files[state.index];
-    const trackKey = file ? getFileKey(file) : null;
-
-    if (!trackKey) {
-      tracePlayback('repeat.toggle.skipped', { reason: 'missing-current-track' });
-      return;
-    }
-
-    const repeatCount = loadTrackRepeatCount?.(trackKey) ?? 1;
-    const nextRepeatCount = repeatCount > 1 ? 1 : 2;
-
-    saveTrackRepeatCount?.(trackKey, nextRepeatCount);
-    state.repeatTrackKey = trackKey;
-    state.repeatRemaining = Math.max(0, nextRepeatCount - 1);
-    void ui.highlight();
-    tracePlayback('repeat.toggle', {
-      repeatCount: nextRepeatCount,
-      trackKey,
-    });
-  }
-
   function syncPendingStartOffset(reason = 'unknown') {
     if (!dom.audioElement) {
       return;
@@ -448,21 +425,19 @@ export function createPlaybackController({
       }
     };
 
-    const safeClearHandler = action => {
-      try {
-        navigator.mediaSession.setActionHandler(action, null);
-        tracePlayback('mediaSession.handler.cleared', { action });
-      } catch (error) {
-        tracePlayback('mediaSession.handler.clear-failed', {
-          action,
-          error: summarizeError(error),
-        });
-      }
+    const logMediaSessionAction = action => event => {
+      tracePlayback(`mediaSession.action.${action}`, {
+        fastSeek: event?.fastSeek ?? null,
+        seekOffset:
+          typeof event?.seekOffset === 'number'
+            ? Number(event.seekOffset.toFixed(3))
+            : null,
+        seekTime:
+          typeof event?.seekTime === 'number'
+            ? Number(event.seekTime.toFixed(3))
+            : null,
+      });
     };
-
-    safeClearHandler('seekbackward');
-    safeClearHandler('seekforward');
-    safeClearHandler('skipad');
 
     safeSetHandler('play', () => {
       tracePlayback('mediaSession.action.play');
@@ -484,15 +459,11 @@ export function createPlaybackController({
       next();
     });
 
-    safeSetHandler('shuffle', () => {
-      tracePlayback('mediaSession.action.shuffle');
-      toggleShuffle();
-    });
-
-    safeSetHandler('repeat', () => {
-      tracePlayback('mediaSession.action.repeat');
-      toggleCurrentTrackRepeat();
-    });
+    safeSetHandler('seekbackward', logMediaSessionAction('seekbackward'));
+    safeSetHandler('seekforward', logMediaSessionAction('seekforward'));
+    safeSetHandler('skipad', logMediaSessionAction('skipad'));
+    safeSetHandler('shuffle', logMediaSessionAction('shuffle'));
+    safeSetHandler('repeat', logMediaSessionAction('repeat'));
 
     safeSetHandler('stop', () => {
       tracePlayback('mediaSession.action.stop');
@@ -1972,6 +1943,39 @@ export function createPlaybackController({
     });
   }
 
+  function getKeyboardEventDetails(event) {
+    const target = event.target;
+
+    return {
+      altKey: event.altKey,
+      code: event.code || null,
+      ctrlKey: event.ctrlKey,
+      isComposing: event.isComposing,
+      isTrusted: event.isTrusted,
+      key: event.key || null,
+      keyCode: event.keyCode ?? null,
+      location: event.location,
+      metaKey: event.metaKey,
+      repeat: event.repeat,
+      shiftKey: event.shiftKey,
+      targetId: target?.id || null,
+      targetTag: target?.tagName || null,
+      type: event.type,
+      which: event.which ?? null,
+    };
+  }
+
+  function bindKeyboardEvents() {
+    tracePlayback('keyboard.events.bind');
+
+    const logKeyboardEvent = event => {
+      tracePlayback('keyboard.event', getKeyboardEventDetails(event));
+    };
+
+    window.addEventListener('keydown', logKeyboardEvent, true);
+    window.addEventListener('keyup', logKeyboardEvent, true);
+  }
+
   function bindVisibilityEvents() {
     if (!dom.audioElement) {
       return;
@@ -2024,6 +2028,7 @@ export function createPlaybackController({
   return {
     applyVolumeForCurrentTrack,
     bindAudioEvents,
+    bindKeyboardEvents,
     bindVisibilityEvents,
     isTrackAllowed,
     kill,
