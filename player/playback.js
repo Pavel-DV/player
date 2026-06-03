@@ -1871,10 +1871,6 @@ export function createPlaybackController({
       tracePlayback('audio.event.seeked');
       state.offset = dom.audioElement.currentTime || 0;
       syncMediaSession('audio.seeked');
-
-      if (!state.isPlaying && dom.audioElement.paused) {
-        refreshAudioElementLayout();
-      }
     });
 
     dom.audioElement.addEventListener('timeupdate', () => {
