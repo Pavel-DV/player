@@ -1,4 +1,6 @@
 export function createScreenNavigator({ state, screens, onPlayerScreenVisible }) {
+  let refreshedPlayerScreenDuringTouch = false;
+
   function applyTransforms(deltaX) {
     const width = window.innerWidth || 1;
     const progress = Math.max(-1, Math.min(1, deltaX / width));
@@ -39,9 +41,11 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
     document.body.setAttribute('data-screen', String(state.currentScreen));
     applyTransforms(0);
 
-    if (state.currentScreen === 2) {
+    if (state.currentScreen === 2 && !refreshedPlayerScreenDuringTouch) {
       onPlayerScreenVisible?.();
     }
+
+    refreshedPlayerScreenDuringTouch = false;
   }
 
   function onTouchStart(event) {
@@ -49,6 +53,7 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
     state.touchStartX = touch.clientX;
     state.touchStartY = touch.clientY;
     state.touchActive = true;
+    refreshedPlayerScreenDuringTouch = false;
 
     if (
       event.target.closest(
@@ -87,6 +92,17 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
 
       if (!hasRightScreen && allowedDeltaX < 0) {
         allowedDeltaX = 0;
+      }
+
+      const targetScreen = state.currentScreen + (allowedDeltaX < 0 ? 1 : -1);
+
+      if (
+        !refreshedPlayerScreenDuringTouch &&
+        targetScreen === 2 &&
+        allowedDeltaX !== 0
+      ) {
+        refreshedPlayerScreenDuringTouch = true;
+        onPlayerScreenVisible?.();
       }
 
       applyTransforms(allowedDeltaX);
