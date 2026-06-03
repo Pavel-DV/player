@@ -227,6 +227,7 @@ playback = createPlaybackController({
   loadTrackStartTime,
   saveNormInfo,
   saveSettings,
+  saveTrackRepeatCount,
   savePlayerState: saveCurrentPlayerState,
 });
 

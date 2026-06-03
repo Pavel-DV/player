@@ -40,6 +40,7 @@ export function createPlaybackController({
   loadTrackStartTime,
   saveNormInfo,
   saveSettings,
+  saveTrackRepeatCount,
   savePlayerState,
 }) {
   let lastTimeupdateTraceAt = 0;
@@ -375,6 +376,28 @@ export function createPlaybackController({
     state.repeatRemaining = Math.max(0, (Number.isFinite(repeatCount) ? repeatCount : 1) - 1);
   }
 
+  function toggleCurrentTrackRepeat() {
+    const file = state.files[state.index];
+    const trackKey = file ? getFileKey(file) : null;
+
+    if (!trackKey) {
+      tracePlayback('repeat.toggle.skipped', { reason: 'missing-current-track' });
+      return;
+    }
+
+    const repeatCount = loadTrackRepeatCount?.(trackKey) ?? 1;
+    const nextRepeatCount = repeatCount > 1 ? 1 : 2;
+
+    saveTrackRepeatCount?.(trackKey, nextRepeatCount);
+    state.repeatTrackKey = trackKey;
+    state.repeatRemaining = Math.max(0, nextRepeatCount - 1);
+    void ui.highlight();
+    tracePlayback('repeat.toggle', {
+      repeatCount: nextRepeatCount,
+      trackKey,
+    });
+  }
+
   function syncPendingStartOffset(reason = 'unknown') {
     if (!dom.audioElement) {
       return;
@@ -459,6 +482,16 @@ export function createPlaybackController({
     safeSetHandler('nexttrack', () => {
       tracePlayback('mediaSession.action.nexttrack');
       next();
+    });
+
+    safeSetHandler('shuffle', () => {
+      tracePlayback('mediaSession.action.shuffle');
+      toggleShuffle();
+    });
+
+    safeSetHandler('repeat', () => {
+      tracePlayback('mediaSession.action.repeat');
+      toggleCurrentTrackRepeat();
     });
 
     safeSetHandler('stop', () => {
