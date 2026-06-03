@@ -42,13 +42,13 @@ export function createPlaybackController({
   saveSettings,
   savePlayerState,
 }) {
-  let lastTimeupdateTraceAt = 0;
   let currentSourceTrackKey = null;
   let currentSourceNormalize = false;
   let cachedNormalizedBlob = null;
   let cachedNormalizedMultiplier = 1;
   let cachedNormalizedTrackKey = null;
   let hasLoggedPlaybackAudioSessionReady = false;
+  let hasLoggedPlaybackAudioSessionUnavailable = false;
   let mediaSessionRevision = 0;
 
   function isTrackAllowed(trackKey) {
@@ -67,17 +67,7 @@ export function createPlaybackController({
     };
   }
 
-  function tracePlayback(event, details = {}, { throttleTimeupdate = false } = {}) {
-    const now = Date.now();
-
-    if (throttleTimeupdate) {
-      if (now - lastTimeupdateTraceAt < 1000) {
-        return;
-      }
-
-      lastTimeupdateTraceAt = now;
-    }
-
+  function tracePlayback(event, details = {}) {
     if (Object.keys(details).length > 0) {
       console.log(`[player] ${event} ${JSON.stringify(details)}`);
       return;
@@ -110,7 +100,10 @@ export function createPlaybackController({
 
   function ensurePlaybackAudioSession(reason = 'unknown') {
     if (!('audioSession' in navigator) || !navigator.audioSession) {
-      tracePlayback('audioSession.unavailable', { reason });
+      if (!hasLoggedPlaybackAudioSessionUnavailable) {
+        hasLoggedPlaybackAudioSessionUnavailable = true;
+        tracePlayback('audioSession.unavailable', { reason });
+      }
       return;
     }
 
@@ -161,9 +154,6 @@ export function createPlaybackController({
       return;
     }
 
-    const traceOptions = {
-      throttleTimeupdate: reason === 'timeupdate',
-    };
     const duration =
       Number.isFinite(dom.audioElement.duration) && dom.audioElement.duration > 0
         ? dom.audioElement.duration
@@ -188,21 +178,21 @@ export function createPlaybackController({
           playbackRate,
           position: Number(Math.min(position, duration).toFixed(3)),
           reason,
-        }, traceOptions);
+        });
       } else {
         tracePlayback('mediaSession.position.skipped', {
           duration: Number.isFinite(duration) ? Number(duration.toFixed(3)) : null,
           hasSetPositionState:
             typeof navigator.mediaSession.setPositionState === 'function',
           reason,
-        }, traceOptions);
+        });
       }
     } catch (error) {
       console.error('Failed to sync Media Session position state:', error);
       tracePlayback('mediaSession.position.failed', {
         error: summarizeError(error),
         reason,
-      }, traceOptions);
+      });
     }
 
     try {
@@ -212,13 +202,55 @@ export function createPlaybackController({
       tracePlayback('mediaSession.playbackState.updated', {
         playbackState: navigator.mediaSession.playbackState,
         reason,
-      }, traceOptions);
+      });
     } catch (error) {
       console.error('Failed to sync Media Session playback state:', error);
       tracePlayback('mediaSession.playbackState.failed', {
         error: summarizeError(error),
         reason,
-      }, traceOptions);
+      });
+    }
+  }
+
+  function syncMediaSessionPosition(reason = 'unknown') {
+    if (!('mediaSession' in navigator) || !dom.audioElement) {
+      return;
+    }
+
+    const duration =
+      Number.isFinite(dom.audioElement.duration) && dom.audioElement.duration > 0
+        ? dom.audioElement.duration
+        : 0;
+
+    if (!(duration > 0) || typeof navigator.mediaSession.setPositionState !== 'function') {
+      return;
+    }
+
+    const position =
+      Number.isFinite(dom.audioElement.currentTime) &&
+      dom.audioElement.currentTime >= 0
+        ? dom.audioElement.currentTime
+        : 0;
+    const playbackRate = dom.audioElement.playbackRate || 1;
+
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: Math.max(0, duration),
+        playbackRate: Math.max(0.1, playbackRate),
+        position: Math.min(position, duration),
+      });
+      tracePlayback('mediaSession.position.updated', {
+        duration: Number(duration.toFixed(3)),
+        playbackRate,
+        position: Number(Math.min(position, duration).toFixed(3)),
+        reason,
+      });
+    } catch (error) {
+      console.error('Failed to sync Media Session position state:', error);
+      tracePlayback('mediaSession.position.failed', {
+        error: summarizeError(error),
+        reason,
+      });
     }
   }
 
@@ -266,10 +298,6 @@ export function createPlaybackController({
     });
 
     if (state.mediaSessionSignature === mediaSessionSignature) {
-      tracePlayback('mediaSession.metadata.unchanged', {
-        source,
-        trackKey,
-      });
       return;
     }
 
@@ -377,6 +405,11 @@ export function createPlaybackController({
 
   function syncPendingStartOffset(reason = 'unknown') {
     if (!dom.audioElement) {
+      return;
+    }
+
+    if (!(typeof state.pendingStartOffset === 'number')) {
+      state.pendingStartOffset = null;
       return;
     }
 
@@ -901,6 +934,7 @@ export function createPlaybackController({
     dom.audioElement.src = state.currentObjectUrl;
     currentSourceTrackKey = getFileKey(file);
     currentSourceNormalize = state.normalize;
+    setupMediaSessionHandlers();
     tracePlayback('audio.source.set', {
       hadPreviousObjectUrl: Boolean(previousObjectUrl),
       markInternalTransition,
@@ -1185,8 +1219,6 @@ export function createPlaybackController({
 
     syncRepeatForCurrentTrack();
     ensurePlaybackAudioSession('playback.play');
-    // Keep this on each play path; one-time setup caused lock-screen track buttons to disappear.
-    setupMediaSessionHandlers();
 
     if (!file) {
       console.error(`Cannot play because there is no file at index ${state.index}`);
@@ -1227,6 +1259,7 @@ export function createPlaybackController({
       tracePlayback('playback.play.resume-existing-source', {
         hasBlobSource,
       });
+      setupMediaSessionHandlers();
       bindEndedHandler(state.playSequence, 'playback.play.resume-existing-source');
       try {
         dom.audioElement.currentTime = getStartOffsetForPlayback(
@@ -1747,7 +1780,7 @@ export function createPlaybackController({
       const hasPlayableSource =
         Boolean(dom.audioElement.src) && dom.audioElement.src !== window.location.href;
 
-      if (hasPlayableSource) {
+      if (hasPlayableSource && !state.isPlaying) {
         ensurePlaybackAudioSession('audio.event.play.active-source');
         applyVolumeForCurrentTrack();
         // Re-register on the media element's play event so iPhone Safari keeps lock-screen controls.
@@ -1814,6 +1847,10 @@ export function createPlaybackController({
     });
 
     dom.audioElement.addEventListener('pause', () => {
+      if (dom.audioElement.seeking) {
+        return;
+      }
+
       tracePlayback('audio.event.pause');
       if (state.isInternalTransition) {
         state.isInternalTransition = false;
@@ -1870,19 +1907,11 @@ export function createPlaybackController({
     dom.audioElement.addEventListener('seeked', () => {
       tracePlayback('audio.event.seeked');
       state.offset = dom.audioElement.currentTime || 0;
-      syncMediaSession('audio.seeked');
+      syncMediaSessionPosition('audio.seeked');
     });
 
     dom.audioElement.addEventListener('timeupdate', () => {
       state.offset = dom.audioElement.currentTime || 0;
-      tracePlayback(
-        'audio.event.timeupdate',
-        {
-          offset: Number(state.offset.toFixed(3)),
-        },
-        { throttleTimeupdate: true }
-      );
-      syncMediaSession('timeupdate');
 
       const file = state.files[state.index];
       const currentTrackKey = file ? getFileKey(file) : null;
