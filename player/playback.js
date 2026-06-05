@@ -1261,18 +1261,6 @@ export function createPlaybackController({
       });
       setupMediaSessionHandlers();
       bindEndedHandler(state.playSequence, 'playback.play.resume-existing-source');
-      try {
-        dom.audioElement.currentTime = getStartOffsetForPlayback(
-          file,
-          state.offset,
-          dom.audioElement.duration
-        );
-      } catch (error) {
-        console.error('Failed to restore current time:', error);
-        tracePlayback('playback.play.restore-time.failed', {
-          error: summarizeError(error),
-        });
-      }
 
       void resumeCurrentSourceOrReload(
         file,
