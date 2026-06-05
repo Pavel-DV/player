@@ -1126,7 +1126,7 @@ export function createPlaybackController({
 
       state.repeatTrackKey = null;
       state.repeatRemaining = null;
-      next();
+      next({ forceContinuePlaying: true });
     };
 
     tracePlayback('audio.onended.bound', {
@@ -1574,13 +1574,15 @@ export function createPlaybackController({
     return direction === 'prev' ? queue[queue.length - 1] : queue[0];
   }
 
-  function next() {
+  function next({ forceContinuePlaying = false } = {}) {
     const queue = getQueueIndices(state);
     const shouldContinuePlaying =
+      forceContinuePlaying ||
       state.isPlaying ||
       Boolean(dom.audioElement && !dom.audioElement.paused);
 
     tracePlayback('playback.next.begin', {
+      forceContinuePlaying,
       queueLength: queue.length,
       shouldContinuePlaying,
     });
