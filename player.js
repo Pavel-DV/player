@@ -274,6 +274,11 @@ if (dom.trackTitleEl) {
   };
 }
 
+dom.mainPlayPauseBtn.onclick = () => {
+  playback.play();
+  dom.mainPlayPauseBtn.remove();
+};
+
 if (dom.addPlaylistBtn) {
   dom.addPlaylistBtn.onclick = () => {
     const fallbackName = `Playlist ${state.playlists.length + 1}`;

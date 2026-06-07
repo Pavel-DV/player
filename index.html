@@ -159,7 +159,10 @@ body[data-screen="4"] #screen4{z-index:2}body[data-screen="4"] #screen1{z-index:
             <span id=trackStartInfo style="display:none"></span>
         </div>
     </div>
-    <audio id=audioElement controls preload="none" x-webkit-airplay="allow" webkit-playsinline playsinline></audio>
+    <div style="position:relative; width:100%; margin:0 auto 20px">
+        <audio id=audioElement controls preload="none" x-webkit-airplay="allow" webkit-playsinline playsinline style="margin-bottom:0"></audio>
+        <button id=mainPlayPauseBtn style="background: transparent; position:absolute; top:50%; transform:translate(10%, -50%);"></button>
+    </div>
     <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:20px">
         <button id=shuffleBtn onclick="player.toggleShuffle()">&#x292D;</button>
         <button onclick="player.prev()">&#x23EE;&#xFE0E;</button>

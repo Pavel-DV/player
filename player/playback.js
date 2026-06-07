@@ -50,6 +50,8 @@ export function createPlaybackController({
   let hasLoggedPlaybackAudioSessionReady = false;
   let hasLoggedPlaybackAudioSessionUnavailable = false;
   let mediaSessionRevision = 0;
+  let testToneAudioContext = null;
+  let testToneAudio = null;
 
   function isTrackAllowed(trackKey) {
     return state.allowExplicit || !state.explicitTrackKeys.has(trackKey);
@@ -74,6 +76,25 @@ export function createPlaybackController({
     }
 
     console.log(`[player] ${event}`);
+  }
+
+  function ensureTestTonePlayback() {
+    if (!testToneAudioContext) {
+      testToneAudioContext = new window.AudioContext();
+
+      const oscillator = testToneAudioContext.createOscillator();
+      const gain = testToneAudioContext.createGain();
+      const streamDestination = testToneAudioContext.createMediaStreamDestination();
+
+      gain.gain.value = 0;
+      oscillator.connect(gain);
+      gain.connect(streamDestination);
+      oscillator.start();
+
+      testToneAudio = new Audio();
+      testToneAudio.srcObject = streamDestination.stream;
+      testToneAudio.play()
+    }
   }
 
   tracePlayback('controller.created', {
@@ -1236,6 +1257,8 @@ export function createPlaybackController({
       savePlayerState();
       return;
     }
+
+    ensureTestTonePlayback();
 
     tracePlayback('playback.play.begin', {
       trackKey: getFileKey(file),

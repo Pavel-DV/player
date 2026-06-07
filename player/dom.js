@@ -23,6 +23,7 @@ export function getPlayerDom() {
     playlistsEl: document.getElementById('playlists'),
     addPlaylistBtn: document.getElementById('addPlaylist'),
     explicitBtn: document.getElementById('explicitBtn'),
+    mainPlayPauseBtn: document.getElementById('mainPlayPauseBtn'),
     shuffleBtn: document.getElementById('shuffleBtn'),
     normalizeBtn: document.getElementById('normalizeBtn'),
     clearCacheBtn: document.getElementById('clearCacheBtn'),
