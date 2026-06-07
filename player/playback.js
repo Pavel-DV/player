@@ -495,10 +495,15 @@ export function createPlaybackController({
     safeClearHandler('seekforward');
     safeClearHandler('skipad');
 
-    // Let iPhone Safari handle lock-screen Play/Pause natively. When the page is
-    // suspended after a paused lock-screen state, custom JS handlers may not run.
-    safeClearHandler('play');
-    safeClearHandler('pause');
+    safeSetHandler('play', () => {
+      tracePlayback('mediaSession.action.play');
+      play();
+    });
+
+    safeSetHandler('pause', () => {
+      tracePlayback('mediaSession.action.pause');
+      pause();
+    });
 
     safeSetHandler('previoustrack', () => {
       tracePlayback('mediaSession.action.previoustrack');
