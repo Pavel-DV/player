@@ -474,15 +474,10 @@ export function createPlaybackController({
     safeClearHandler('seekforward');
     safeClearHandler('skipad');
 
-    safeSetHandler('play', () => {
-      tracePlayback('mediaSession.action.play');
-      play();
-    });
-
-    safeSetHandler('pause', () => {
-      tracePlayback('mediaSession.action.pause');
-      pause();
-    });
+    // Let iPhone Safari handle lock-screen Play/Pause natively. When the page is
+    // suspended after a paused lock-screen state, custom JS handlers may not run.
+    safeClearHandler('play');
+    safeClearHandler('pause');
 
     safeSetHandler('previoustrack', () => {
       tracePlayback('mediaSession.action.previoustrack');
@@ -1259,8 +1254,6 @@ export function createPlaybackController({
       tracePlayback('playback.play.resume-existing-source', {
         hasBlobSource,
       });
-      setupMediaSessionHandlers();
-      bindEndedHandler(state.playSequence, 'playback.play.resume-existing-source');
 
       void resumeCurrentSourceOrReload(
         file,
@@ -1773,8 +1766,6 @@ export function createPlaybackController({
       if (hasPlayableSource && !state.isPlaying) {
         ensurePlaybackAudioSession('audio.event.play.active-source');
         applyVolumeForCurrentTrack();
-        // Re-register on the media element's play event so iPhone Safari keeps lock-screen controls.
-        setupMediaSessionHandlers();
         bindEndedHandler(state.playSequence, 'audio.event.play.active-source');
       }
 
@@ -2024,7 +2015,6 @@ export function createPlaybackController({
             ? 'document.visibilitychange.hidden'
             : 'document.visibilitychange.visible'
         );
-        setupMediaSessionHandlers();
         syncMediaSession(
           document.hidden
             ? 'document.visibilitychange.hidden'
