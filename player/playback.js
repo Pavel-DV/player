@@ -86,7 +86,7 @@ export function createPlaybackController({
       const gain = testToneAudioContext.createGain();
       const streamDestination = testToneAudioContext.createMediaStreamDestination();
 
-      gain.gain.value = 0;
+      gain.gain.value = 1;
       oscillator.connect(gain);
       gain.connect(streamDestination);
       oscillator.start();
