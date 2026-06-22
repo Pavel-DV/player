@@ -1579,8 +1579,6 @@ export function createPlaybackController({
         return candidateIndex;
       }
     }
-
-    return direction === 'prev' ? queue[queue.length - 1] : queue[0];
   }
 
   function next({ forceContinuePlaying = false } = {}) {
@@ -1734,7 +1732,6 @@ export function createPlaybackController({
 
     state.shuffle = nextShuffleState;
     dom.shuffleBtn?.classList.toggle('on', state.shuffle);
-    void ui.highlight();
   }
 
   function toggleShuffle() {
@@ -1973,39 +1970,6 @@ export function createPlaybackController({
     });
   }
 
-  function getKeyboardEventDetails(event) {
-    const target = event.target;
-
-    return {
-      altKey: event.altKey,
-      code: event.code || null,
-      ctrlKey: event.ctrlKey,
-      isComposing: event.isComposing,
-      isTrusted: event.isTrusted,
-      key: event.key || null,
-      keyCode: event.keyCode ?? null,
-      location: event.location,
-      metaKey: event.metaKey,
-      repeat: event.repeat,
-      shiftKey: event.shiftKey,
-      targetId: target?.id || null,
-      targetTag: target?.tagName || null,
-      type: event.type,
-      which: event.which ?? null,
-    };
-  }
-
-  function bindKeyboardEvents() {
-    tracePlayback('keyboard.events.bind');
-
-    const logKeyboardEvent = event => {
-      tracePlayback('keyboard.event', getKeyboardEventDetails(event));
-    };
-
-    window.addEventListener('keydown', logKeyboardEvent, true);
-    window.addEventListener('keyup', logKeyboardEvent, true);
-  }
-
   function bindVisibilityEvents() {
     if (!dom.audioElement) {
       return;
@@ -2057,7 +2021,6 @@ export function createPlaybackController({
   return {
     applyVolumeForCurrentTrack,
     bindAudioEvents,
-    bindKeyboardEvents,
     bindVisibilityEvents,
     isTrackAllowed,
     kill,
@@ -2072,7 +2035,6 @@ export function createPlaybackController({
     setAllowExplicit,
     setNormalize,
     setShuffle,
-    setupMediaSessionHandlers,
     startTrack,
     syncMediaMetadata,
     toggleAllowExplicit,

@@ -360,7 +360,6 @@ ui.renderList();
 void ui.highlight();
 
 playback.bindAudioEvents();
-playback.bindKeyboardEvents();
 playback.bindVisibilityEvents();
 navigation.bindTouchNavigation();
 

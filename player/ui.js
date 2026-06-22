@@ -300,7 +300,7 @@ export function createUiController({
 
         if (itemIndex === state.index && state.isPlaying) {
           span.style.color = '#23fd23';
-        } else if (span.style.color !== '#23fd23' || !state.isPlaying) {
+        } else {
           span.style.color = '';
         }
       });
@@ -506,7 +506,6 @@ export function createUiController({
 
     if (autoplay && queue.length > 0) {
       actions.play();
-      void highlight();
     } else if (queue.length > 0) {
       actions.primeCurrentTrackSource?.();
     }
