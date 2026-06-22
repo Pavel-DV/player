@@ -1,9 +1,7 @@
 const logEntries = [];
 const listeners = new Set();
 const originalConsole = {};
-const LOGGING_ENABLED_KEY = 'developerLoggingEnabled';
 let installed = false;
-let loggingEnabled = localStorage.getItem(LOGGING_ENABLED_KEY) === 'true';
 
 function formatLogValue(value) {
   if (value instanceof Error) {
@@ -43,13 +41,11 @@ function installConsoleLogCapture() {
     originalConsole[level] = console[level]?.bind(console);
 
     console[level] = (...args) => {
-      if (level === 'error' || loggingEnabled) {
-        emitLogEntry({
-          level,
-          message: args.map(formatLogValue).join(' '),
-          time: new Date(),
-        });
-      }
+      emitLogEntry({
+        level,
+        message: args.map(formatLogValue).join(' '),
+        time: new Date(),
+      });
 
       originalConsole[level]?.(...args);
     };
@@ -74,17 +70,9 @@ function renderDeveloperLog(logEl) {
   }
 }
 
-export function bindDeveloperLog(logEl, loggingToggleEl) {
+export function bindDeveloperLog(logEl) {
   if (!logEl) {
     return;
-  }
-
-  if (loggingToggleEl) {
-    loggingToggleEl.checked = loggingEnabled;
-    loggingToggleEl.onchange = () => {
-      loggingEnabled = loggingToggleEl.checked;
-      localStorage.setItem(LOGGING_ENABLED_KEY, String(loggingEnabled));
-    };
   }
 
   renderDeveloperLog(logEl);

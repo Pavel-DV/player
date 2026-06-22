@@ -34,7 +34,6 @@ export function getPlayerDom() {
       document.getElementById('screen4'),
     ].filter(Boolean),
     developerLogEl: document.getElementById('developerLog'),
-    developerLoggingToggleEl: document.getElementById('developerLoggingToggle'),
     clearDeveloperLogBtn: document.getElementById('clearDeveloperLogBtn'),
   };
 }

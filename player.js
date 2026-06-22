@@ -46,7 +46,7 @@ import { createUiController } from './player/ui.js';
 const dom = getPlayerDom();
 const state = createPlayerState();
 window.__playerBuildId = playerBuildId;
-bindDeveloperLog(dom.developerLogEl, dom.developerLoggingToggleEl);
+bindDeveloperLog(dom.developerLogEl);
 
 if (dom.clearDeveloperLogBtn) {
   dom.clearDeveloperLogBtn.onclick = clearDeveloperLog;

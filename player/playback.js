@@ -726,7 +726,6 @@ export function createPlaybackController({
         tracePlayback('playForSequence.success', {
           sequenceId,
         });
-        void prepareNextTrackSource();
         return true;
       })
       .catch(error => {
@@ -1417,19 +1416,6 @@ export function createPlaybackController({
     }
   }
 
-  function prepareNextTrackSource() {
-    const nextIndex = findAdjacentPlayableTrackIndex('next');
-
-    if (typeof nextIndex !== 'number' || nextIndex === state.index) {
-      return;
-    }
-
-    const file = state.files[nextIndex];
-    void buildPreparedSource(file).catch(error => {
-      console.error('Failed to prepare next track source:', error);
-    });
-  }
-
   function next({ forceContinuePlaying = false } = {}) {
     const queue = getQueueIndices(state);
     const shouldContinuePlaying =
@@ -1581,10 +1567,6 @@ export function createPlaybackController({
 
     state.shuffle = nextShuffleState;
     dom.shuffleBtn?.classList.toggle('on', state.shuffle);
-
-    if (state.isPlaying) {
-      void prepareNextTrackSource();
-    }
   }
 
   function toggleShuffle() {
