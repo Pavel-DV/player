@@ -140,7 +140,12 @@ export function createMetadataReader({ getFileKey }) {
             view.getUint8(position + 2),
             view.getUint8(position + 3)
           );
-          const frameSize = view.getUint32(position + 4);
+          const frameSize = view.getUint8(3) === 4
+            ? ((view.getUint8(position + 4) & 0x7f) << 21) |
+              ((view.getUint8(position + 5) & 0x7f) << 14) |
+              ((view.getUint8(position + 6) & 0x7f) << 7) |
+              (view.getUint8(position + 7) & 0x7f)
+            : view.getUint32(position + 4);
 
           position += 10;
 

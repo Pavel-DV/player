@@ -1263,7 +1263,7 @@ export function createPlaybackController({
       return;
     }
 
-    ensureTestTonePlayback();
+    // ensureTestTonePlayback();
 
     tracePlayback('playback.play.begin', {
       trackKey: getFileKey(file),
