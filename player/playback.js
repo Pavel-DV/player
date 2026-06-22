@@ -90,7 +90,7 @@ export function createPlaybackController({
       const gain = testToneAudioContext.createGain();
       const streamDestination = testToneAudioContext.createMediaStreamDestination();
 
-      gain.gain.value = 1;
+      gain.gain.value = 0;
       oscillator.connect(gain);
       gain.connect(streamDestination);
       oscillator.start();
@@ -1098,7 +1098,7 @@ export function createPlaybackController({
       return;
     }
 
-    // ensureTestTonePlayback();
+    ensureTestTonePlayback();
 
     tracePlayback('playback.play.begin', {
       trackKey: getFileKey(file),
