@@ -3,6 +3,7 @@ import {
   getPlaylistItemOrder,
   setFileKey,
 } from './shared.js';
+import { analyzeNormalization } from './normalization.js';
 
 const PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS = 3;
 const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
@@ -537,24 +538,6 @@ export function createPlaybackController({
     tracePlayback('mediaSession.handlers.setup.end');
   }
 
-  function analyzePeak(audioBuffer) {
-    let peak = 0;
-
-    for (let channelIndex = 0; channelIndex < audioBuffer.numberOfChannels; channelIndex += 1) {
-      const channelData = audioBuffer.getChannelData(channelIndex);
-
-      for (let sampleIndex = 0; sampleIndex < channelData.length; sampleIndex += 1) {
-        const absoluteSample = Math.abs(channelData[sampleIndex]);
-
-        if (absoluteSample > peak) {
-          peak = absoluteSample;
-        }
-      }
-    }
-
-    return peak;
-  }
-
   function getBits(bytes, byteOffset, bitOffset, bitLength) {
     let value = 0;
 
@@ -686,7 +669,7 @@ export function createPlaybackController({
 
   async function rewriteMp3GlobalGain(file, multiplier) {
     const trackKey = getFileKey(file);
-    const gainStepDelta = Math.round(Math.log2(multiplier) * 4);
+    const gainStepDelta = Math.floor(Math.log2(multiplier) * 4);
 
     if (!Number.isFinite(gainStepDelta) || gainStepDelta === 0) {
       return {
@@ -782,9 +765,9 @@ export function createPlaybackController({
       return file;
     }
 
-    let peak = loadNormInfo(trackKey);
+    const peak = loadNormInfo(trackKey);
 
-    if (!(typeof peak === 'number' && peak > 0)) {
+    if (!(peak > 0) && loadTrackGain(trackKey) === null) {
       const DecodeAudioContext = window.AudioContext || window.webkitAudioContext;
       const decodeAudioContext = new DecodeAudioContext();
       let audioBuffer = null;
@@ -804,10 +787,10 @@ export function createPlaybackController({
         }
       }
 
-      peak = analyzePeak(audioBuffer);
+      const normalization = analyzeNormalization(audioBuffer);
 
-      if (typeof peak === 'number' && peak > 0) {
-        saveNormInfo?.(trackKey, peak);
+      if (normalization > 0) {
+        saveNormInfo?.(trackKey, normalization);
       }
     }
 

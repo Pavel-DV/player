@@ -177,6 +177,7 @@ function reconcileExplicitPlayback({
 const normalization = createNormalizationService({
   lookupFileByKey,
   loadNormInfo,
+  loadTrackGain,
   loadTrackStartTime,
   saveNormInfo,
   saveTrackStartTime,
