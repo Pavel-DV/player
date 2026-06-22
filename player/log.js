@@ -41,11 +41,13 @@ function installConsoleLogCapture() {
     originalConsole[level] = console[level]?.bind(console);
 
     console[level] = (...args) => {
-      emitLogEntry({
-        level,
-        message: args.map(formatLogValue).join(' '),
-        time: new Date(),
-      });
+      if (level === 'error' || document.getElementById('developerLoggingToggle').checked) {
+        emitLogEntry({
+          level,
+          message: args.map(formatLogValue).join(' '),
+          time: new Date(),
+        });
+      }
 
       originalConsole[level]?.(...args);
     };
