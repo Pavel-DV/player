@@ -48,6 +48,9 @@ export function createPlaybackController({
   let cachedNormalizedBlob = null;
   let cachedNormalizedMultiplier = 1;
   let cachedNormalizedTrackKey = null;
+  let mp3GainWorker = null;
+  let mp3GainWorkerRequestId = 0;
+  const mp3GainWorkerRequests = new Map();
   let hasLoggedPlaybackAudioSessionReady = false;
   let hasLoggedPlaybackAudioSessionUnavailable = false;
   let mediaSessionRevision = 0;
@@ -538,133 +541,32 @@ export function createPlaybackController({
     tracePlayback('mediaSession.handlers.setup.end');
   }
 
-  function getBits(bytes, byteOffset, bitOffset, bitLength) {
-    let value = 0;
-
-    for (let bitIndex = 0; bitIndex < bitLength; bitIndex += 1) {
-      const absoluteBitOffset = byteOffset * 8 + bitOffset + bitIndex;
-      const currentByte = bytes[absoluteBitOffset >> 3];
-      const currentBit = 7 - (absoluteBitOffset & 7);
-      value = (value << 1) | ((currentByte >> currentBit) & 1);
+  function getMp3GainWorker() {
+    if (mp3GainWorker) {
+      return mp3GainWorker;
     }
 
-    return value;
-  }
+    const workerUrl = new URL('./mp3-gain-worker.js', import.meta.url);
+    workerUrl.searchParams.set('build', window.__playerBuildId ?? 'dev');
+    mp3GainWorker = new Worker(workerUrl, { type: 'module' });
+    mp3GainWorker.addEventListener('message', event => {
+      const { buffer, changedFrameCount, error, requestId } = event.data ?? {};
+      const request = mp3GainWorkerRequests.get(requestId);
 
-  function setBits(bytes, byteOffset, bitOffset, bitLength, value) {
-    for (let bitIndex = 0; bitIndex < bitLength; bitIndex += 1) {
-      const absoluteBitOffset = byteOffset * 8 + bitOffset + bitIndex;
-      const byteIndex = absoluteBitOffset >> 3;
-      const currentBit = 7 - (absoluteBitOffset & 7);
-      const nextBit = (value >> (bitLength - bitIndex - 1)) & 1;
-
-      if (nextBit) {
-        bytes[byteIndex] |= 1 << currentBit;
-      } else {
-        bytes[byteIndex] &= ~(1 << currentBit);
+      if (!request) {
+        return;
       }
-    }
-  }
 
-  function getId3TagSize(bytes) {
-    if (
-      bytes.length < 10 ||
-      bytes[0] !== 0x49 ||
-      bytes[1] !== 0x44 ||
-      bytes[2] !== 0x33
-    ) {
-      return 0;
-    }
+      mp3GainWorkerRequests.delete(requestId);
 
-    const tagSize =
-      ((bytes[6] & 0x7f) << 21) |
-      ((bytes[7] & 0x7f) << 14) |
-      ((bytes[8] & 0x7f) << 7) |
-      (bytes[9] & 0x7f);
-    const hasFooter = (bytes[5] & 0x10) !== 0;
+      if (error) {
+        request.reject(new Error(error));
+        return;
+      }
 
-    return 10 + tagSize + (hasFooter ? 10 : 0);
-  }
-
-  function parseMp3FrameHeader(bytes, frameOffset) {
-    if (frameOffset + 4 > bytes.length) {
-      return null;
-    }
-
-    const byte1 = bytes[frameOffset];
-    const byte2 = bytes[frameOffset + 1];
-    const byte3 = bytes[frameOffset + 2];
-    const byte4 = bytes[frameOffset + 3];
-
-    if (byte1 !== 0xff || (byte2 & 0xe0) !== 0xe0) {
-      return null;
-    }
-
-    const versionBits = (byte2 >> 3) & 0x03;
-    const layerBits = (byte2 >> 1) & 0x03;
-    const bitrateIndex = (byte3 >> 4) & 0x0f;
-    const sampleRateIndex = (byte3 >> 2) & 0x03;
-    const padding = (byte3 >> 1) & 0x01;
-    const channelMode = (byte4 >> 6) & 0x03;
-
-    if (versionBits === 0x01 || layerBits !== 0x01 || bitrateIndex === 0 || bitrateIndex === 0x0f) {
-      return null;
-    }
-
-    if (sampleRateIndex === 0x03) {
-      return null;
-    }
-
-    const version =
-      versionBits === 0x03 ? 1 : versionBits === 0x02 ? 2 : 2.5;
-    const sampleRates =
-      version === 1
-        ? [44100, 48000, 32000]
-        : version === 2
-          ? [22050, 24000, 16000]
-          : [11025, 12000, 8000];
-    const bitrates =
-      version === 1
-        ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0]
-        : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0];
-    const sampleRate = sampleRates[sampleRateIndex];
-    const bitrateKbps = bitrates[bitrateIndex];
-
-    if (!sampleRate || !bitrateKbps) {
-      return null;
-    }
-
-    const channels = channelMode === 0x03 ? 1 : 2;
-    const frameLength = Math.floor(
-      ((version === 1 ? 144000 : 72000) * bitrateKbps) / sampleRate + padding
-    );
-    const hasCrc = (byte2 & 0x01) === 0;
-    const sideInfoSize =
-      version === 1 ? (channels === 1 ? 17 : 32) : channels === 1 ? 9 : 17;
-    const channelInfoBitLength = version === 1 ? 59 : 63;
-    const channelInfoStartBitOffset =
-      version === 1
-        ? 9 + (channels === 1 ? 5 : 3) + channels * 4
-        : 8 + (channels === 1 ? 1 : 2);
-    const sideInfoByteOffset = frameOffset + 4 + (hasCrc ? 2 : 0);
-
-    if (
-      frameLength <= 0 ||
-      frameOffset + frameLength > bytes.length ||
-      sideInfoByteOffset + sideInfoSize > frameOffset + frameLength
-    ) {
-      return null;
-    }
-
-    return {
-      channelInfoBitLength,
-      channelInfoStartBitOffset,
-      channels,
-      frameLength,
-      granules: version === 1 ? 2 : 1,
-      sideInfoByteOffset,
-      sideInfoSize,
-    };
+      request.resolve({ buffer, changedFrameCount });
+    });
+    return mp3GainWorker;
   }
 
   async function rewriteMp3GlobalGain(file, multiplier) {
@@ -678,65 +580,15 @@ export function createPlaybackController({
       };
     }
 
-    const sourceBytes = new Uint8Array(await file.arrayBuffer());
-    const outputBytes = new Uint8Array(sourceBytes);
-    let frameOffset = getId3TagSize(outputBytes);
-    let changedFrameCount = 0;
-    let parsedFrameCount = 0;
+    const buffer = await file.arrayBuffer();
+    const requestId = ++mp3GainWorkerRequestId;
+    const result = new Promise((resolve, reject) => {
+      mp3GainWorkerRequests.set(requestId, { reject, resolve });
+    });
+    getMp3GainWorker().postMessage({ buffer, gainStepDelta, requestId }, [buffer]);
+    const { buffer: outputBuffer, changedFrameCount } = await result;
 
-    while (frameOffset + 4 <= outputBytes.length) {
-      if (
-        outputBytes.length - frameOffset === 128 &&
-        outputBytes[frameOffset] === 0x54 &&
-        outputBytes[frameOffset + 1] === 0x41 &&
-        outputBytes[frameOffset + 2] === 0x47
-      ) {
-        break;
-      }
-
-      const frameHeader = parseMp3FrameHeader(outputBytes, frameOffset);
-
-      if (!frameHeader) {
-        break;
-      }
-
-      parsedFrameCount += 1;
-
-      for (let granuleIndex = 0; granuleIndex < frameHeader.granules; granuleIndex += 1) {
-        for (let channelIndex = 0; channelIndex < frameHeader.channels; channelIndex += 1) {
-          const channelBitOffset =
-            frameHeader.channelInfoStartBitOffset +
-            (granuleIndex * frameHeader.channels + channelIndex) *
-              frameHeader.channelInfoBitLength;
-          const globalGainBitOffset = channelBitOffset + 21;
-          const currentGlobalGain = getBits(
-            outputBytes,
-            frameHeader.sideInfoByteOffset,
-            globalGainBitOffset,
-            8
-          );
-          const nextGlobalGain = Math.max(
-            0,
-            Math.min(255, currentGlobalGain + gainStepDelta)
-          );
-
-          if (nextGlobalGain !== currentGlobalGain) {
-            setBits(
-              outputBytes,
-              frameHeader.sideInfoByteOffset,
-              globalGainBitOffset,
-              8,
-              nextGlobalGain
-            );
-            changedFrameCount += 1;
-          }
-        }
-      }
-
-      frameOffset += frameHeader.frameLength;
-    }
-
-    if (parsedFrameCount === 0 || changedFrameCount === 0) {
+    if (changedFrameCount === 0) {
       return {
         changedFrameCount,
         source: file,
@@ -752,7 +604,7 @@ export function createPlaybackController({
     return {
       changedFrameCount,
       source: setFileKey(
-        new Blob([outputBytes], { type: file.type || 'audio/mpeg' }),
+        new Blob([outputBuffer], { type: file.type || 'audio/mpeg' }),
         trackKey
       ),
     };
@@ -874,6 +726,7 @@ export function createPlaybackController({
         tracePlayback('playForSequence.success', {
           sequenceId,
         });
+        void prepareNextTrackSource();
         return true;
       })
       .catch(error => {
@@ -1564,6 +1417,19 @@ export function createPlaybackController({
     }
   }
 
+  function prepareNextTrackSource() {
+    const nextIndex = findAdjacentPlayableTrackIndex('next');
+
+    if (typeof nextIndex !== 'number' || nextIndex === state.index) {
+      return;
+    }
+
+    const file = state.files[nextIndex];
+    void buildPreparedSource(file).catch(error => {
+      console.error('Failed to prepare next track source:', error);
+    });
+  }
+
   function next({ forceContinuePlaying = false } = {}) {
     const queue = getQueueIndices(state);
     const shouldContinuePlaying =
@@ -1715,6 +1581,10 @@ export function createPlaybackController({
 
     state.shuffle = nextShuffleState;
     dom.shuffleBtn?.classList.toggle('on', state.shuffle);
+
+    if (state.isPlaying) {
+      void prepareNextTrackSource();
+    }
   }
 
   function toggleShuffle() {
