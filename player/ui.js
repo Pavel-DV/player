@@ -1,4 +1,5 @@
 import { buildDefaultArtwork, createPlaylistId } from './shared.js';
+import { createPlaylistDragController } from './playlist-drag.js';
 
 const EMPTY_METADATA = {
   title: null,
@@ -58,6 +59,18 @@ export function createUiController({
       return true;
     });
   }
+
+  createPlaylistDragController({
+    listEl: dom.listEl,
+    onReorder(key, nextKey) {
+      const playlist = getCurrentPlaylist();
+      const items = playlist.items;
+      items.splice(items.indexOf(key), 1);
+      items.splice(nextKey ? items.indexOf(nextKey) : items.length, 0, key);
+      state.shuffledPlaylistItemsById.delete(playlist.id);
+      savePlaylists(state.playlists, state.currentPlaylistId);
+    },
+  });
 
   function renderCurrentPlaylistName() {
     if (!dom.currentPlaylistNameEl) {
@@ -580,6 +593,10 @@ export function createUiController({
 
       const inPlaylist = playlistItems.has(key);
 
+      if (inPlaylist) {
+        listItem.dataset.playlistKey = key;
+      }
+
       const playlistButton = document.createElement('button');
       playlistButton.style.width = '24px';
       playlistButton.style.height = '24px';
@@ -587,11 +604,10 @@ export function createUiController({
       playlistButton.style.flexShrink = '0';
       playlistButton.style.fontSize = '16px';
       playlistButton.setAttribute('data-icon', inPlaylist ? 'minus' : 'plus');
-      playlistButton.title = inPlaylist
-        ? 'Remove from current playlist'
-        : 'Add to current playlist';
+      playlistButton.style.touchAction = inPlaylist ? 'none' : '';
 
       if (inPlaylist) {
+        playlistButton.dataset.playlistDrag = '';
         playlistButton.style.color = '#23fd23';
       }
 

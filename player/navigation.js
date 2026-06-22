@@ -57,7 +57,7 @@ export function createScreenNavigator({ state, screens, onPlayerScreenVisible })
 
     if (
       event.target.closest(
-        '#audioElement, #trackArtwork, #trackStartToggle, #trackEndToggle, #trackGainToggle, #trackStartDefaultBtn, #trackEndDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn'
+        '#audioElement, #trackArtwork, #trackStartToggle, #trackEndToggle, #trackGainToggle, #trackStartDefaultBtn, #trackEndDefaultBtn, #trackGainDefaultBtn, #trackGainUnityBtn, [data-playlist-drag]'
       )
     ) {
       state.touchActive = false;
