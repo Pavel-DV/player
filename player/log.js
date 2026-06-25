@@ -47,9 +47,9 @@ function installConsoleLogCapture() {
           message: args.map(formatLogValue).join(' '),
           time: new Date(),
         });
-      }
 
-      originalConsole[level]?.(...args);
+        originalConsole[level]?.(...args);
+      }
     };
   });
 }
