@@ -33,6 +33,7 @@ export function createTrackRotationController({
     currentStartOffset: 0,
     dragAngleDelta: 0,
     dragLastAngle: 0,
+    dragStartAnimationTime: 0,
     currentTrackKey: null,
     dragStartValue: 0,
     isActive: false,
@@ -509,12 +510,16 @@ export function createTrackRotationController({
             : knobState.activeControl === 'end'
               ? getEffectiveTrackEndTime()
             : knobState.currentStartOffset;
-      dom.trackArtworkEl.classList.add('adjusting');
-      dom.trackArtworkEl.style.transform = 'rotate(0rad)';
-      dom.trackArtworkEl.setPointerCapture(event.pointerId);
-      if (!knobState.activeControl) {
+      if (knobState.activeControl) {
+        dom.trackArtworkEl.classList.add('adjusting');
+        dom.trackArtworkEl.style.transform = 'rotate(0rad)';
+      } else {
+        const animation = dom.trackArtworkEl.getAnimations()[0];
+        knobState.dragStartAnimationTime = animation.currentTime || 0;
+        animation.pause();
         armPlaybackRateStopTimer();
       }
+      dom.trackArtworkEl.setPointerCapture(event.pointerId);
       renderAdjusterInfo(knobState.currentStartOffset);
       updateGainPreview();
     });
@@ -532,16 +537,24 @@ export function createTrackRotationController({
       );
       knobState.dragAngleDelta += angleDelta;
       knobState.dragLastAngle = pointerAngle;
-      dom.trackArtworkEl.style.transform =
-        `rotate(${knobState.dragAngleDelta}rad)`;
 
       if (!knobState.activeControl) {
+        const animation = dom.trackArtworkEl.getAnimations()[0];
+        const duration = animation.effect.getTiming().duration;
+        const time =
+          (knobState.dragStartAnimationTime +
+            (knobState.dragAngleDelta / (Math.PI * 2)) * duration) %
+          duration;
+        animation.currentTime = (time + duration) % duration;
         dom.audioElement.preservesPitch = false;
         dom.audioElement.webkitPreservesPitch = false;
         dom.audioElement.playbackRate = angleDelta < 0 ? -4 : 4;
         armPlaybackRateStopTimer();
         return;
       }
+
+      dom.trackArtworkEl.style.transform =
+        `rotate(${knobState.dragAngleDelta}rad)`;
 
       if (knobState.activeControl === 'start') {
         const nextOffset = Number(
@@ -634,13 +647,17 @@ export function createTrackRotationController({
 
       knobState.isActive = false;
       knobState.pointerId = null;
-      if (!knobState.activeControl) {
+      const wasPlaybackScrub = !knobState.activeControl;
+      if (wasPlaybackScrub) {
         window.clearTimeout(knobState.playbackRateStopTimer);
         dom.audioElement.playbackRate = 1;
       } else if (knobState.activeControl === 'gain') {
         previewTrackGain?.({ commit: true, forceVisible: true });
       }
       sync(true);
+      if (wasPlaybackScrub) {
+        dom.trackArtworkEl.getAnimations()[0].play();
+      }
     };
 
     dom.trackArtworkEl.addEventListener('pointerup', endDrag);

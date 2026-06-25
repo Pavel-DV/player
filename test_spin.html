@@ -1,0 +1,46 @@
+<style>
+.spinner {
+  width: 100px;
+  height: 100px;
+  background-color: red;
+  animation: rotate 10s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>
+<div class="spinner">12132</div>
+
+<script>
+    const spinner = document.querySelector('.spinner');
+    const animation = spinner.getAnimations()[0];
+
+    spinner.style.animationPlayState = 'paused';
+    spinner.style.animationPlayState = 'running';
+
+    animation.pause();
+    const angle = 90;
+    const duration = 1000; // длительность оборота в миллисекундах
+
+    animation.currentTime = (angle / 360) * duration;
+    animation.currentTime = 500;
+    animation.play();
+
+    const transform = getComputedStyle(spinner).transform;
+    const matrix = new DOMMatrixReadOnly(transform);
+
+    let angle2 = Math.atan2(matrix.b, matrix.a) * (180 / Math.PI);
+
+    if (angle2 < 0) {
+        angle2 += 360;
+    }
+
+    console.log(angle2);
+</script>
