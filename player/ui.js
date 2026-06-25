@@ -91,7 +91,7 @@ export function createUiController({
     }
 
     if (dom.trackArtworkEl) {
-      dom.trackArtworkEl.style.display = 'none';
+      dom.trackArtworkEl.style.visibility = 'hidden';
       dom.trackArtworkEl.removeAttribute('src');
     }
 
@@ -285,15 +285,13 @@ export function createUiController({
   }
 
   function resetArtworkSpin() {
-    const artworkEl = dom.trackArtworkEl;
-    artworkEl.classList.remove('spin', 'running');
-    artworkEl.offsetWidth;
-    artworkEl.classList.add('spin');
+    dom.trackArtworkEl.getAnimations()[0].currentTime = 0;
     syncArtworkPlaybackState();
   }
 
   function syncArtworkPlaybackState() {
-    dom.trackArtworkEl.classList.toggle('running', Boolean(state.isPlaying));
+    const animation = dom.trackArtworkEl.getAnimations()[0];
+    state.isPlaying ? animation.play() : animation.pause();
   }
 
 
@@ -357,10 +355,10 @@ export function createUiController({
     if (dom.trackArtworkEl) {
       if (freshCurrentFile) {
         dom.trackArtworkEl.src = metadata.artwork || buildDefaultArtwork();
-        dom.trackArtworkEl.style.display = 'block';
+        dom.trackArtworkEl.style.visibility = 'visible';
         syncArtworkPlaybackState();
       } else {
-        dom.trackArtworkEl.style.display = 'none';
+        dom.trackArtworkEl.style.visibility = 'hidden';
         dom.trackArtworkEl.removeAttribute('src');
       }
     }

@@ -656,7 +656,8 @@ export function createTrackRotationController({
       }
       sync(true);
       if (wasPlaybackScrub) {
-        dom.trackArtworkEl.getAnimations()[0].play();
+        const animation = dom.trackArtworkEl.getAnimations()[0];
+        state.isPlaying ? animation.play() : animation.pause();
       }
     };
 
