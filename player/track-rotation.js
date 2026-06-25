@@ -1,4 +1,6 @@
 const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
+const ROTATE_PLAYBACK_SECONDS_PER_REVOLUTION = 10;
+const ROTATE_PLAYBACK_SEEK_INTERVAL_MS = 500;
 const ROTATE_SECONDS_PER_RADIAN = 1.8;
 const ROTATE_GAIN_PER_RADIAN = 0.45;
 const MAX_TRACK_GAIN = 4;
@@ -34,6 +36,9 @@ export function createTrackRotationController({
     dragAngleDelta: 0,
     dragLastAngle: 0,
     dragStartAnimationTime: 0,
+    dragStartPlaybackTime: 0,
+    dragLastPlaybackSeekTime: 0,
+    dragPlaybackTime: 0,
     currentTrackKey: null,
     dragStartValue: 0,
     isActive: false,
@@ -146,6 +151,16 @@ export function createTrackRotationController({
     knobState.playbackRateStopTimer = window.setTimeout(() => {
       dom.audioElement.playbackRate = 0.5;
     }, 120);
+  }
+
+  function syncArtworkToPlayback() {
+    const animation = dom.trackArtworkEl.getAnimations()[0];
+    const duration = animation.effect.getTiming().duration;
+    animation.currentTime =
+      (((dom.audioElement.currentTime || 0) %
+        ROTATE_PLAYBACK_SECONDS_PER_REVOLUTION) /
+        ROTATE_PLAYBACK_SECONDS_PER_REVOLUTION) *
+      duration;
   }
 
   function getDerivedTrackGain(trackKey) {
@@ -516,6 +531,9 @@ export function createTrackRotationController({
       } else {
         const animation = dom.trackArtworkEl.getAnimations()[0];
         knobState.dragStartAnimationTime = animation.currentTime || 0;
+        knobState.dragStartPlaybackTime = dom.audioElement.currentTime || 0;
+        knobState.dragLastPlaybackSeekTime = 0;
+        knobState.dragPlaybackTime = knobState.dragStartPlaybackTime;
         animation.pause();
         armPlaybackRateStopTimer();
       }
@@ -546,9 +564,24 @@ export function createTrackRotationController({
             (knobState.dragAngleDelta / (Math.PI * 2)) * duration) %
           duration;
         animation.currentTime = (time + duration) % duration;
+        const trackDuration = getCurrentTrackDuration();
+        const nextTime =
+          knobState.dragStartPlaybackTime +
+          (knobState.dragAngleDelta / (Math.PI * 2)) *
+            ROTATE_PLAYBACK_SECONDS_PER_REVOLUTION;
+        knobState.dragPlaybackTime = Math.min(
+          Number.isFinite(trackDuration) ? trackDuration : Infinity,
+          Math.max(0, nextTime)
+        );
+        state.offset = knobState.dragPlaybackTime;
+        const now = Date.now();
+        if (now - knobState.dragLastPlaybackSeekTime >= ROTATE_PLAYBACK_SEEK_INTERVAL_MS) {
+          dom.audioElement.currentTime = knobState.dragPlaybackTime;
+          knobState.dragLastPlaybackSeekTime = now;
+        }
         dom.audioElement.preservesPitch = false;
         dom.audioElement.webkitPreservesPitch = false;
-        dom.audioElement.playbackRate = angleDelta < 0 ? -4 : 4;
+        dom.audioElement.playbackRate = angleDelta < 0 && knobState.dragPlaybackTime > 0 ? -4 : 4;
         armPlaybackRateStopTimer();
         return;
       }
@@ -650,6 +683,8 @@ export function createTrackRotationController({
       const wasPlaybackScrub = !knobState.activeControl;
       if (wasPlaybackScrub) {
         window.clearTimeout(knobState.playbackRateStopTimer);
+        dom.audioElement.currentTime = knobState.dragPlaybackTime;
+        state.offset = dom.audioElement.currentTime || 0;
         dom.audioElement.playbackRate = 1;
       } else if (knobState.activeControl === 'gain') {
         previewTrackGain?.({ commit: true, forceVisible: true });
@@ -663,6 +698,11 @@ export function createTrackRotationController({
 
     dom.trackArtworkEl.addEventListener('pointerup', endDrag);
     dom.trackArtworkEl.addEventListener('pointercancel', endDrag);
+    dom.audioElement.addEventListener('seeked', () => {
+      if (!knobState.isActive) {
+        syncArtworkToPlayback();
+      }
+    });
 
     document.addEventListener('pointerdown', event => {
       if (
