@@ -336,6 +336,10 @@ export function createTrackRotationController({
       'adjusting',
       Boolean(knobState.activeControl)
     );
+    if (!knobState.activeControl) {
+      const animation = dom.trackArtworkEl.getAnimations()[0];
+      state.isPlaying ? animation?.play() : animation?.pause();
+    }
   }
 
   function updateGainPreview() {
