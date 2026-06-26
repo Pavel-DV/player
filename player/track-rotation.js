@@ -156,6 +156,10 @@ export function createTrackRotationController({
 
   function syncArtworkToPlayback() {
     const animation = dom.trackArtworkEl.getAnimations()[0];
+    if (!animation) {
+      return;
+    }
+
     const duration = animation.effect.getTiming().duration;
     animation.currentTime =
       (((dom.audioElement.currentTime || 0) %

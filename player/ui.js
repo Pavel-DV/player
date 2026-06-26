@@ -291,7 +291,7 @@ export function createUiController({
 
   function syncArtworkPlaybackState() {
     const animation = dom.trackArtworkEl.getAnimations()[0];
-    state.isPlaying ? animation.play() : animation.pause();
+    state.isPlaying ? animation?.play() : animation?.pause();
   }
 
 
