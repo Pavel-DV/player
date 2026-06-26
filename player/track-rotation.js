@@ -651,7 +651,7 @@ export function createTrackRotationController({
         const nextEndTime = Number(
           normalizeTrackEndTime(
             knobState.dragStartValue +
-              knobState.dragAngleDelta * ROTATE_SECONDS_PER_RADIAN,
+              -knobState.dragAngleDelta * ROTATE_SECONDS_PER_RADIAN,
             getCurrentTrackDuration(),
             knobState.currentStartOffset
           ).toFixed(3)
