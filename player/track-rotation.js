@@ -44,6 +44,7 @@ export function createTrackRotationController({
     isActive: false,
     pointerId: null,
     playbackRateStopTimer: null,
+    skipArtworkSeekSync: false,
   };
 
   function getCurrentTrackFile() {
@@ -683,6 +684,7 @@ export function createTrackRotationController({
       const wasPlaybackScrub = !knobState.activeControl;
       if (wasPlaybackScrub) {
         window.clearTimeout(knobState.playbackRateStopTimer);
+        knobState.skipArtworkSeekSync = true;
         dom.audioElement.currentTime = knobState.dragPlaybackTime;
         state.offset = dom.audioElement.currentTime || 0;
         dom.audioElement.playbackRate = 1;
@@ -699,6 +701,11 @@ export function createTrackRotationController({
     dom.trackArtworkEl.addEventListener('pointerup', endDrag);
     dom.trackArtworkEl.addEventListener('pointercancel', endDrag);
     dom.audioElement.addEventListener('seeked', () => {
+      if (knobState.skipArtworkSeekSync) {
+        knobState.skipArtworkSeekSync = false;
+        return;
+      }
+
       if (!knobState.isActive) {
         syncArtworkToPlayback();
       }
