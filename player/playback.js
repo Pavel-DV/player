@@ -1464,7 +1464,6 @@ export function createPlaybackController({
     state.previewEndTrackKey = getFileKey(file);
     state.suppressAutoNextTrackKey = state.previewEndTrackKey;
     state.suppressAutoNextUntil = nowMs() + 2500;
-    state.offset = previewStartTime;
     state.pendingStartOffset = previewStartTime;
 
     tracePlayback('playback.preview-end-offset', {

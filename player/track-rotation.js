@@ -41,6 +41,8 @@ export function createTrackRotationController({
     dragPlaybackTime: 0,
     currentTrackKey: null,
     dragStartValue: 0,
+    endEditPlaybackTime: null,
+    endEditWasPaused: true,
     isActive: false,
     pointerId: null,
     playbackRateStopTimer: null,
@@ -342,7 +344,31 @@ export function createTrackRotationController({
     });
   }
 
+  function restoreEndEditPlaybackTime() {
+    if (knobState.endEditPlaybackTime === null) {
+      return;
+    }
+
+    state.previewEndTime = null;
+    state.previewEndTrackKey = null;
+    state.pendingStartOffset = null;
+    state.suppressAutoNextUntil = 0;
+    state.suppressAutoNextTrackKey = null;
+    dom.audioElement.currentTime = knobState.endEditPlaybackTime;
+    state.offset = knobState.endEditPlaybackTime;
+    if (knobState.endEditWasPaused) {
+      dom.audioElement.pause();
+    } else {
+      void dom.audioElement.play();
+    }
+    knobState.endEditPlaybackTime = null;
+  }
+
   function setActiveControl(nextControl) {
+    if (knobState.activeControl === 'end' && nextControl !== 'end') {
+      restoreEndEditPlaybackTime();
+    }
+
     knobState.activeControl =
       nextControl && knobState.currentTrackKey ? nextControl : null;
     applyControlState();
@@ -449,6 +475,8 @@ export function createTrackRotationController({
       setActiveControl(nextControl);
 
       if (nextControl === 'end') {
+        knobState.endEditPlaybackTime = dom.audioElement.currentTime || 0;
+        knobState.endEditWasPaused = dom.audioElement.paused;
         previewEndOffset?.(getEffectiveTrackEndTime());
       }
     };
