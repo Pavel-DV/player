@@ -88,16 +88,10 @@ function readArtworkFrame(view, buffer, position, frameSize) {
       offset,
       position + frameSize - offset
     );
-    let binary = '';
-    const chunkSize = 8192;
 
-    for (let index = 0; index < imageData.length; index += chunkSize) {
-      binary += String.fromCharCode(
-        ...imageData.subarray(index, index + chunkSize)
-      );
-    }
-
-    return `data:${mimeType || 'image/jpeg'};base64,${window.btoa(binary)}`;
+    return URL.createObjectURL(
+      new Blob([imageData], { type: mimeType || 'image/jpeg' })
+    );
   } catch (error) {
     console.warn('Failed to parse APIC frame:', error);
     return null;
