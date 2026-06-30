@@ -1276,16 +1276,6 @@ export function createPlaybackController({
     }
 
     mediaSessionRevision += 1;
-    syncMediaMetadata(
-      file,
-      {
-        title: getDisplayName(getFileKey(file)),
-        artist: null,
-        artwork: null,
-      },
-      getCurrentPlaylistName(),
-      'playback.play.fallback'
-    );
 
     const sequenceId = ++state.playSequence;
     const requestedOffset = state.offset;
