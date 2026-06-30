@@ -1416,7 +1416,7 @@ export function createPlaybackController({
         : duration;
     const previewEndTime =
       nextEndTime >= duration
-        ? Math.max(trackStartOffset, duration - START_OFFSET_END_TOLERANCE_SECONDS)
+        ? Math.max(trackStartOffset, duration - 0.5)
         : nextEndTime;
 
     const previewStartTime = Math.max(
