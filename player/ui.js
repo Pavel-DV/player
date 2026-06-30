@@ -626,11 +626,12 @@ export function createUiController({
       title.style.fontSize = '14px';
       title.style.lineHeight = '1.2';
       title.onclick = () => {
-        if (itemIndex === state.index && state.isPlaying) {
-          actions.pause();
-        } else {
-          actions.startTrack(itemIndex);
+        if (itemIndex === state.index) {
+          state.isPlaying ? actions.pause() : actions.play();
+          return;
         }
+
+        actions.startTrack(itemIndex);
       };
 
       const opfsDeleteButton = document.createElement('button');
@@ -693,11 +694,17 @@ export function createUiController({
       selectButton.style.textAlign = 'left';
       selectButton.style.minWidth = '0';
       selectButton.style.justifyContent = 'flex-start';
-      selectButton.onclick = () =>
+      selectButton.onclick = () => {
+        if (playlist.id === state.currentPlaylistId) {
+          navigation?.setScreen(1);
+          return;
+        }
+
         activatePlaylist(playlist, {
           autoplay: false,
           navigateToLibrary: true,
         });
+      };
 
       if (playlist.id === state.currentPlaylistId) {
         selectButton.style.fontWeight = 'bold';
@@ -715,8 +722,8 @@ export function createUiController({
         isPlaylistPlaying ? 'pause' : 'play'
       );
       playPauseButton.onclick = () => {
-        if (isCurrentPlaylist && state.isPlaying) {
-          actions.pause();
+        if (isCurrentPlaylist) {
+          state.isPlaying ? actions.pause() : actions.play();
           return;
         }
 
