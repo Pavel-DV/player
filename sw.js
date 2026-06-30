@@ -1,26 +1,29 @@
 const CACHE_NAME = 'player';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/player.js',
-  '/player/build.js',
-  '/player/dom.js',
-  '/player/library.js',
-  '/player/metadata.js',
-  '/player/navigation.js',
-  '/player/normalization.js',
-  '/player/opfs-library.js',
-  '/player/opfs-worker.js',
-  '/player/playback.js',
-  '/player/shared.js',
-  '/player/state.js',
-  '/player/storage.js',
-  '/player/track-rotation.js',
-  '/player/ui.js'
+  '.',
+  'favicon.ico',
+  'icons/icon512.png',
+  'index.html',
+  'manifest.json',
+  'player.js',
+  'player/build.js',
+  'player/dom.js',
+  'player/library.js',
+  'player/metadata.js',
+  'player/navigation.js',
+  'player/normalization.js',
+  'player/opfs-library.js',
+  'player/opfs-worker.js',
+  'player/playback.js',
+  'player/shared.js',
+  'player/state.js',
+  'player/storage.js',
+  'player/track-rotation.js',
+  'player/ui.js'
 ];
 
 async function fetchFresh(asset) {
-  const url = new URL(asset, self.location.origin);
+  const url = new URL(asset, self.registration.scope);
   url.searchParams.set('sw-cache', Date.now());
 
   const response = await fetch(url, { cache: 'no-store' });
@@ -37,7 +40,9 @@ async function updateCache() {
   const responses = await Promise.all(ASSETS.map(fetchFresh));
 
   await Promise.all(
-    ASSETS.map((asset, index) => cache.put(asset, responses[index].clone()))
+    ASSETS.map((asset, index) => (
+      cache.put(new URL(asset, self.registration.scope), responses[index].clone())
+    ))
   );
 }
 

@@ -236,7 +236,7 @@ async function refreshApp() {
 }
 
 window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
         .catch(() => {});
 });
 </script>
