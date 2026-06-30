@@ -1414,23 +1414,18 @@ export function createPlaybackController({
       endOffset > 0
         ? Math.max(minEndTime, duration - endOffset)
         : duration;
-    const previewEndTime =
-      nextEndTime >= duration
-        ? Math.max(trackStartOffset, duration - 0.5)
-        : nextEndTime;
-
     const previewStartTime = Math.max(
       trackStartOffset,
-      previewEndTime - 1
+      nextEndTime - 1
     );
 
     clearPreviewEndTarget();
 
-    if (!(Number.isFinite(previewEndTime) && previewEndTime > 0)) {
+    if (!(Number.isFinite(nextEndTime) && nextEndTime > 0)) {
       return;
     }
 
-    state.previewEndTime = previewEndTime;
+    state.previewEndTime = nextEndTime;
     state.previewEndTrackKey = getFileKey(file);
     state.pendingStartOffset = previewStartTime;
 
