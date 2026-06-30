@@ -1,5 +1,4 @@
 const logEntries = [];
-const MAX_LOG_ENTRIES = 300;
 const listeners = new Set();
 const originalConsole = {};
 let installed = false;
@@ -24,10 +23,6 @@ function formatLogValue(value) {
 
 function emitLogEntry(entry) {
   logEntries.push(entry);
-
-  if (logEntries.length > MAX_LOG_ENTRIES) {
-    logEntries.splice(0, logEntries.length - MAX_LOG_ENTRIES);
-  }
 
   if (renderPending) {
     return;
