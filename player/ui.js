@@ -729,10 +729,11 @@ export function createUiController({
       const renameButton = document.createElement('button');
       renameButton.style.width = 'auto';
       renameButton.style.height = '32px';
-      renameButton.style.padding = '0 10px';
+      renameButton.style.borderRadius = '16px';
+      renameButton.style.padding = '0 12px';
       renameButton.style.flexShrink = '0';
       renameButton.textContent = 'Rename';
-      renameButton.style.fontSize = '12px';
+      renameButton.style.fontSize = '14px';
       renameButton.onclick = () => {
         const newName = window.prompt('Rename playlist:', playlist.name);
 
@@ -745,8 +746,8 @@ export function createUiController({
       };
 
       const deleteButton = document.createElement('button');
-      deleteButton.style.width = '36px';
-      deleteButton.style.height = '36px';
+      deleteButton.style.width = '32px';
+      deleteButton.style.height = '32px';
       deleteButton.style.flexShrink = '0';
       deleteButton.textContent = 'X';
       deleteButton.onclick = () => {
