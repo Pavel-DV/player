@@ -13,8 +13,6 @@ export function createPlayerState() {
     pendingStartOffset: null,
     previewEndTime: null,
     previewEndTrackKey: null,
-    suppressAutoNextUntil: 0,
-    suppressAutoNextTrackKey: null,
     playSequence: 0,
     shuffle: false,
     normalize: false,

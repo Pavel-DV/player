@@ -356,8 +356,6 @@ export function createTrackRotationController({
     state.previewEndTime = null;
     state.previewEndTrackKey = null;
     state.pendingStartOffset = null;
-    state.suppressAutoNextUntil = 0;
-    state.suppressAutoNextTrackKey = null;
     dom.audioElement.currentTime = knobState.endEditPlaybackTime;
     state.offset = knobState.endEditPlaybackTime;
     if (knobState.endEditWasPaused) {

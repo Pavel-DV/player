@@ -390,10 +390,6 @@ export function createPlaybackController({
     state.previewEndTrackKey = null;
   }
 
-  function nowMs() {
-    return Date.now();
-  }
-
   function getStartOffsetForPlayback(file, requestedOffset, duration = NaN) {
     const nextOffset =
       Number.isFinite(requestedOffset) && requestedOffset > 0
@@ -1092,23 +1088,6 @@ export function createPlaybackController({
 
       const currentFile = state.files[state.index];
       const currentTrackKey = currentFile ? getFileKey(currentFile) : null;
-      const suppressAutoNext =
-        Boolean(currentTrackKey) &&
-        state.suppressAutoNextTrackKey === currentTrackKey &&
-        state.suppressAutoNextUntil > nowMs();
-
-      if (suppressAutoNext) {
-        tracePlayback('audio.onended.suppressed', {
-          until: state.suppressAutoNextUntil,
-          now: nowMs(),
-          trackKey: currentTrackKey,
-        });
-        state.suppressAutoNextUntil = 0;
-        state.suppressAutoNextTrackKey = null;
-        pause();
-        return;
-      }
-
       if (
         currentTrackKey &&
         state.repeatTrackKey === currentTrackKey &&
@@ -1435,22 +1414,24 @@ export function createPlaybackController({
       endOffset > 0
         ? Math.max(minEndTime, duration - endOffset)
         : duration;
+    const previewEndTime =
+      nextEndTime >= duration
+        ? Math.max(trackStartOffset, duration - START_OFFSET_END_TOLERANCE_SECONDS)
+        : nextEndTime;
 
     const previewStartTime = Math.max(
       trackStartOffset,
-      nextEndTime - 1
+      previewEndTime - 1
     );
 
     clearPreviewEndTarget();
 
-    if (!(Number.isFinite(nextEndTime) && nextEndTime > 0)) {
+    if (!(Number.isFinite(previewEndTime) && previewEndTime > 0)) {
       return;
     }
 
-    state.previewEndTime = nextEndTime;
+    state.previewEndTime = previewEndTime;
     state.previewEndTrackKey = getFileKey(file);
-    state.suppressAutoNextTrackKey = state.previewEndTrackKey;
-    state.suppressAutoNextUntil = nowMs() + 2500;
     state.pendingStartOffset = previewStartTime;
 
     tracePlayback('playback.preview-end-offset', {
@@ -1911,8 +1892,6 @@ export function createPlaybackController({
           previewEndTime: Number(state.previewEndTime.toFixed(3)),
           trackKey: currentTrackKey,
         });
-        state.suppressAutoNextTrackKey = currentTrackKey;
-        state.suppressAutoNextUntil = nowMs() + 2500;
         clearPreviewEndTarget();
         pause();
         return;
