@@ -4,6 +4,10 @@ import {
   setFileKey,
 } from './shared.js';
 import { analyzeNormalization } from './normalization.js';
+import {
+  summarizeError,
+  log,
+} from './log.js';
 
 const PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS = 3;
 const START_OFFSET_END_TOLERANCE_SECONDS = 0.25;
@@ -58,27 +62,6 @@ export function createPlaybackController({
     return state.allowExplicit || !state.explicitTrackKeys.has(trackKey);
   }
 
-  function summarizeError(error) {
-    if (!error) {
-      return null;
-    }
-
-    return {
-      code: error.code ?? null,
-      message: error.message ?? String(error),
-      name: error.name ?? 'Error',
-    };
-  }
-
-  function tracePlayback(event, details = {}) {
-    if (Object.keys(details).length > 0) {
-      console.log(`[player] ${event} ${JSON.stringify(details)}`);
-      return;
-    }
-
-    console.log(`[player] ${event}`);
-  }
-
   function ensureTestTonePlayback() {
     if (!testToneAudioContext) {
       testToneAudioContext = new window.AudioContext();
@@ -98,7 +81,7 @@ export function createPlaybackController({
     }
   }
 
-  tracePlayback('controller.created', {
+  log('controller.created', {
     buildId: window.__playerBuildId ?? null,
     userAgent:
       typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
@@ -124,7 +107,7 @@ export function createPlaybackController({
     if (!('audioSession' in navigator) || !navigator.audioSession) {
       if (!hasLoggedPlaybackAudioSessionUnavailable) {
         hasLoggedPlaybackAudioSessionUnavailable = true;
-        tracePlayback('audioSession.unavailable', { reason });
+        log('audioSession.unavailable', { reason });
       }
       return;
     }
@@ -138,14 +121,14 @@ export function createPlaybackController({
 
       if (!hasLoggedPlaybackAudioSessionReady || previousType !== 'playback') {
         hasLoggedPlaybackAudioSessionReady = true;
-        tracePlayback('audioSession.type.ready', {
+        log('audioSession.type.ready', {
           reason,
           type: navigator.audioSession.type,
         });
       }
     } catch (error) {
       console.error('Failed to configure audio session:', error);
-      tracePlayback('audioSession.type.failed', {
+      log('audioSession.type.failed', {
         error: summarizeError(error),
         reason,
       });
@@ -168,7 +151,7 @@ export function createPlaybackController({
 
   function syncMediaSession(reason = 'unknown') {
     if (!('mediaSession' in navigator) || !dom.audioElement) {
-      tracePlayback('mediaSession.sync.skipped', {
+      log('mediaSession.sync.skipped', {
         hasAudioElement: Boolean(dom.audioElement),
         hasMediaSession: 'mediaSession' in navigator,
         reason,
@@ -195,14 +178,14 @@ export function createPlaybackController({
           position: Math.min(position, duration),
         });
 
-        tracePlayback('mediaSession.position.updated', {
+        log('mediaSession.position.updated', {
           duration: Number(duration.toFixed(3)),
           playbackRate,
           position: Number(Math.min(position, duration).toFixed(3)),
           reason,
         });
       } else {
-        tracePlayback('mediaSession.position.skipped', {
+        log('mediaSession.position.skipped', {
           duration: Number.isFinite(duration) ? Number(duration.toFixed(3)) : null,
           hasSetPositionState:
             typeof navigator.mediaSession.setPositionState === 'function',
@@ -211,7 +194,7 @@ export function createPlaybackController({
       }
     } catch (error) {
       console.error('Failed to sync Media Session position state:', error);
-      tracePlayback('mediaSession.position.failed', {
+      log('mediaSession.position.failed', {
         error: summarizeError(error),
         reason,
       });
@@ -221,13 +204,13 @@ export function createPlaybackController({
       navigator.mediaSession.playbackState = state.isPlaying
         ? 'playing'
         : 'paused';
-      tracePlayback('mediaSession.playbackState.updated', {
+      log('mediaSession.playbackState.updated', {
         playbackState: navigator.mediaSession.playbackState,
         reason,
       });
     } catch (error) {
       console.error('Failed to sync Media Session playback state:', error);
-      tracePlayback('mediaSession.playbackState.failed', {
+      log('mediaSession.playbackState.failed', {
         error: summarizeError(error),
         reason,
       });
@@ -261,7 +244,7 @@ export function createPlaybackController({
         playbackRate: Math.max(0.1, playbackRate),
         position: Math.min(position, duration),
       });
-      tracePlayback('mediaSession.position.updated', {
+      log('mediaSession.position.updated', {
         duration: Number(duration.toFixed(3)),
         playbackRate,
         position: Number(Math.min(position, duration).toFixed(3)),
@@ -269,7 +252,7 @@ export function createPlaybackController({
       });
     } catch (error) {
       console.error('Failed to sync Media Session position state:', error);
-      tracePlayback('mediaSession.position.failed', {
+      log('mediaSession.position.failed', {
         error: summarizeError(error),
         reason,
       });
@@ -278,7 +261,7 @@ export function createPlaybackController({
 
   function syncMediaMetadata(file, metadata, playlistName, source = 'unknown') {
     if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') {
-      tracePlayback('mediaSession.metadata.skipped', {
+      log('mediaSession.metadata.skipped', {
         hasMediaMetadata: typeof MediaMetadata !== 'undefined',
         hasMediaSession: 'mediaSession' in navigator,
         source,
@@ -289,7 +272,7 @@ export function createPlaybackController({
     if (!file) {
       navigator.mediaSession.metadata = null;
       state.mediaSessionSignature = null;
-      tracePlayback('mediaSession.metadata.cleared', { source });
+      log('mediaSession.metadata.cleared', { source });
       return;
     }
 
@@ -322,7 +305,7 @@ export function createPlaybackController({
 
     state.mediaSessionSignature = mediaSessionSignature;
     navigator.mediaSession.metadata = new MediaMetadata(mediaMetadataPayload);
-    tracePlayback('mediaSession.metadata.updated', {
+    log('mediaSession.metadata.updated', {
       artist: mediaMetadataPayload.artist,
       mediaSessionRevision,
       source,
@@ -434,7 +417,7 @@ export function createPlaybackController({
     );
 
     if (nextOffset !== state.pendingStartOffset) {
-      tracePlayback('audio.start-offset.normalized', {
+      log('audio.start-offset.normalized', {
         duration: Number.isFinite(dom.audioElement.duration)
           ? Number(dom.audioElement.duration.toFixed(3))
           : null,
@@ -449,7 +432,7 @@ export function createPlaybackController({
 
   function setupMediaSessionHandlers() {
     if (!('mediaSession' in navigator) || !dom.audioElement) {
-      tracePlayback('mediaSession.handlers.skipped', {
+      log('mediaSession.handlers.skipped', {
         hasAudioElement: Boolean(dom.audioElement),
         hasMediaSession: 'mediaSession' in navigator,
       });
@@ -458,15 +441,15 @@ export function createPlaybackController({
 
     // iPhone Safari may drop lock-screen prev/next controls after source changes
     // unless Media Session handlers are re-registered during playback transitions.
-    tracePlayback('mediaSession.handlers.setup.begin');
+    log('mediaSession.handlers.setup.begin');
 
     const safeSetHandler = (action, handler) => {
       try {
         navigator.mediaSession.setActionHandler(action, handler);
-        tracePlayback('mediaSession.handler.registered', { action });
+        log('mediaSession.handler.registered', { action });
       } catch (error) {
         console.warn(`Media Session action "${action}" is not supported:`, error);
-        tracePlayback('mediaSession.handler.failed', {
+        log('mediaSession.handler.failed', {
           action,
           error: summarizeError(error),
         });
@@ -476,9 +459,9 @@ export function createPlaybackController({
     const safeClearHandler = action => {
       try {
         navigator.mediaSession.setActionHandler(action, null);
-        tracePlayback('mediaSession.handler.cleared', { action });
+        log('mediaSession.handler.cleared', { action });
       } catch (error) {
-        tracePlayback('mediaSession.handler.clear-failed', {
+        log('mediaSession.handler.clear-failed', {
           action,
           error: summarizeError(error),
         });
@@ -490,32 +473,32 @@ export function createPlaybackController({
     safeClearHandler('skipad');
 
     safeSetHandler('play', () => {
-      tracePlayback('mediaSession.action.play');
+      log('mediaSession.action.play');
       play();
     });
 
     safeSetHandler('pause', () => {
-      tracePlayback('mediaSession.action.pause');
+      log('mediaSession.action.pause');
       pause();
     });
 
     safeSetHandler('previoustrack', () => {
-      tracePlayback('mediaSession.action.previoustrack');
+      log('mediaSession.action.previoustrack');
       prev();
     });
 
     safeSetHandler('nexttrack', () => {
-      tracePlayback('mediaSession.action.nexttrack');
+      log('mediaSession.action.nexttrack');
       next();
     });
 
     safeSetHandler('stop', () => {
-      tracePlayback('mediaSession.action.stop');
+      log('mediaSession.action.stop');
       pause();
     });
 
     safeSetHandler('seekto', event => {
-      tracePlayback('mediaSession.action.seekto', {
+      log('mediaSession.action.seekto', {
         fastSeek: event.fastSeek ?? null,
         seekTime:
           typeof event.seekTime === 'number' ? Number(event.seekTime.toFixed(3)) : null,
@@ -528,7 +511,7 @@ export function createPlaybackController({
         syncMediaSession('action.seekto');
       }
     });
-    tracePlayback('mediaSession.handlers.setup.end');
+    log('mediaSession.handlers.setup.end');
   }
 
   function getBits(bytes, byteOffset, bitOffset, bitLength) {
@@ -736,7 +719,7 @@ export function createPlaybackController({
       };
     }
 
-    tracePlayback('audio.source.mp3.global-gain.rewritten', {
+    log('audio.source.mp3.global-gain.rewritten', {
       changedFrameCount,
       gainStepDelta,
       trackKey,
@@ -774,7 +757,7 @@ export function createPlaybackController({
         try {
           await decodeAudioContext.close();
         } catch (error) {
-          tracePlayback('audioContext.decode.close.failed', {
+          log('audioContext.decode.close.failed', {
             error: summarizeError(error),
           });
         }
@@ -820,7 +803,7 @@ export function createPlaybackController({
     }
 
     state.objectUrlsPendingRevoke.push(objectUrl);
-    tracePlayback('objectUrl.revoke.queued', {
+    log('objectUrl.revoke.queued', {
       pending: state.objectUrlsPendingRevoke.length,
     });
 
@@ -832,7 +815,7 @@ export function createPlaybackController({
       }
 
       URL.revokeObjectURL(objectUrl);
-      tracePlayback('objectUrl.revoked', {
+      log('objectUrl.revoked', {
         pending: state.objectUrlsPendingRevoke.length,
       });
     }, 1500);
@@ -840,7 +823,7 @@ export function createPlaybackController({
 
   function revokeCurrentObjectUrl() {
     if (state.currentObjectUrl) {
-      tracePlayback('objectUrl.current.revoke', {
+      log('objectUrl.current.revoke', {
         hasCurrentObjectUrl: true,
       });
       queueObjectUrlForRevoke(state.currentObjectUrl);
@@ -856,7 +839,7 @@ export function createPlaybackController({
       return Promise.resolve(false);
     }
 
-    tracePlayback('playForSequence.begin', {
+    log('playForSequence.begin', {
       errorLabel,
       sequenceId,
     });
@@ -864,7 +847,7 @@ export function createPlaybackController({
     return dom.audioElement
       .play()
       .then(() => {
-        tracePlayback('playForSequence.success', {
+        log('playForSequence.success', {
           sequenceId,
         });
         return true;
@@ -877,7 +860,7 @@ export function createPlaybackController({
           console.error(errorLabel, error);
         }
 
-        tracePlayback('playForSequence.failed', {
+        log('playForSequence.failed', {
           error: summarizeError(error),
           errorLabel,
           isAbortError,
@@ -903,7 +886,7 @@ export function createPlaybackController({
       }
 
       state.offset = dom.audioElement.currentTime || state.offset || 0;
-      tracePlayback('playback.play.resume-existing-source.reload', {
+      log('playback.play.resume-existing-source.reload', {
         fallbackReason,
         offset: Number(state.offset.toFixed(3)),
         sequenceId,
@@ -932,7 +915,7 @@ export function createPlaybackController({
     currentSourceTrackKey = getFileKey(file);
     currentSourceNormalize = state.normalize;
     setupMediaSessionHandlers();
-    tracePlayback('audio.source.set', {
+    log('audio.source.set', {
       hadPreviousObjectUrl: Boolean(previousObjectUrl),
       markInternalTransition,
       trackKey: getFileKey(file),
@@ -959,7 +942,7 @@ export function createPlaybackController({
       state.isInternalTransition = true;
       dom.audioElement.pause();
       state.isPlaying = false;
-      tracePlayback('audio.source.reload.begin', {
+      log('audio.source.reload.begin', {
         offset: Number(state.offset.toFixed(3)),
         reason,
         resumePlayback,
@@ -971,7 +954,7 @@ export function createPlaybackController({
       .then(source => {
         setAudioSource(source);
         state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
-        tracePlayback('audio.source.reload.success', {
+        log('audio.source.reload.success', {
           pendingStartOffset: state.pendingStartOffset,
           reason,
           resumePlayback,
@@ -988,7 +971,7 @@ export function createPlaybackController({
       })
       .catch(error => {
         console.error('Failed to reload current track source:', error);
-        tracePlayback('audio.source.reload.failed', {
+        log('audio.source.reload.failed', {
           error: summarizeError(error),
           reason,
           resumePlayback,
@@ -1001,7 +984,7 @@ export function createPlaybackController({
     const file = state.files[state.index];
 
     if (!file || !dom.audioElement) {
-      tracePlayback('audio.source.prime.skipped', {
+      log('audio.source.prime.skipped', {
         hasAudioElement: Boolean(dom.audioElement),
         hasFile: Boolean(file),
         reason: 'missing-target',
@@ -1010,7 +993,7 @@ export function createPlaybackController({
     }
 
     if (!isTrackAllowed(getFileKey(file))) {
-      tracePlayback('audio.source.prime.skipped', {
+      log('audio.source.prime.skipped', {
         reason: 'explicit-disabled',
         trackKey: getFileKey(file),
       });
@@ -1018,7 +1001,7 @@ export function createPlaybackController({
     }
 
     if (state.isPlaying) {
-      tracePlayback('audio.source.prime.skipped', {
+      log('audio.source.prime.skipped', {
         reason: 'already-playing',
         trackKey: getFileKey(file),
       });
@@ -1034,7 +1017,7 @@ export function createPlaybackController({
       currentSourceNormalize === state.normalize;
 
     if (hasMatchingExistingSource) {
-      tracePlayback('audio.source.prime.skipped', {
+      log('audio.source.prime.skipped', {
         reason: 'existing-source',
         trackKey: getFileKey(file),
       });
@@ -1047,7 +1030,7 @@ export function createPlaybackController({
         state.pendingStartOffset = getStartOffsetForPlayback(file, state.offset);
         dom.audioElement.load();
         state.isInternalTransition = false;
-        tracePlayback('audio.source.prime.success', {
+        log('audio.source.prime.success', {
           pendingStartOffset: state.pendingStartOffset,
           trackKey: getFileKey(file),
         });
@@ -1055,7 +1038,7 @@ export function createPlaybackController({
       })
       .catch(error => {
         console.error('Failed to prime current track source:', error);
-        tracePlayback('audio.source.prime.failed', {
+        log('audio.source.prime.failed', {
           error: summarizeError(error),
         });
         return false;
@@ -1073,13 +1056,13 @@ export function createPlaybackController({
 
     dom.audioElement.onended = () => {
       clearPreviewEndTarget();
-      tracePlayback('audio.onended', {
+      log('audio.onended', {
         sequenceId,
         source,
       });
 
       if (sequenceId !== state.playSequence) {
-        tracePlayback('audio.onended.skipped', {
+        log('audio.onended.skipped', {
           sequenceId,
           source,
           statePlaySequence: state.playSequence,
@@ -1099,7 +1082,7 @@ export function createPlaybackController({
         state.repeatRemaining > 0
       ) {
         state.repeatRemaining -= 1;
-        tracePlayback('audio.onended.repeat', {
+        log('audio.onended.repeat', {
           remaining: state.repeatRemaining,
           trackKey: currentTrackKey,
         });
@@ -1113,7 +1096,7 @@ export function createPlaybackController({
       next({ forceContinuePlaying: true });
     };
 
-    tracePlayback('audio.onended.bound', {
+    log('audio.onended.bound', {
       sequenceId,
       source,
     });
@@ -1139,11 +1122,11 @@ export function createPlaybackController({
   }
 
   function kill() {
-    tracePlayback('playback.kill.begin');
+    log('playback.kill.begin');
     state.isPlaying = false;
     cancelPlaybackRequest();
     clearAudioSource();
-    tracePlayback('playback.kill.end');
+    log('playback.kill.end');
   }
 
   function applyVolumeForCurrentTrack({ commit = false, forceVisible = false } = {}) {
@@ -1178,7 +1161,7 @@ export function createPlaybackController({
 
   function play() {
     if (!dom.audioElement) {
-      tracePlayback('playback.play.skipped', {
+      log('playback.play.skipped', {
         hasAudioElement: Boolean(dom.audioElement),
         isPlaying: state.isPlaying,
       });
@@ -1194,7 +1177,7 @@ export function createPlaybackController({
       currentSourceNormalize === state.normalize;
 
     if (alreadyPlayingCurrentSource) {
-      tracePlayback('playback.play.skipped', {
+      log('playback.play.skipped', {
         hasAudioElement: true,
         isPlaying: state.isPlaying,
       });
@@ -1206,14 +1189,14 @@ export function createPlaybackController({
 
     if (!file) {
       console.error(`Cannot play because there is no file at index ${state.index}`);
-      tracePlayback('playback.play.failed', {
+      log('playback.play.failed', {
         reason: 'missing-file',
       });
       return;
     }
 
     if (!isTrackAllowed(getFileKey(file))) {
-      tracePlayback('playback.play.failed', {
+      log('playback.play.failed', {
         reason: 'explicit-disabled',
         trackKey: getFileKey(file),
       });
@@ -1228,7 +1211,7 @@ export function createPlaybackController({
 
     ensureTestTonePlayback();
 
-    tracePlayback('playback.play.begin', {
+    log('playback.play.begin', {
       trackKey: getFileKey(file),
     });
 
@@ -1242,7 +1225,7 @@ export function createPlaybackController({
       currentSourceNormalize === state.normalize;
 
     if (canResumeExistingSource) {
-      tracePlayback('playback.play.resume-existing-source', {
+      log('playback.play.resume-existing-source', {
         hasBlobSource,
       });
 
@@ -1262,7 +1245,7 @@ export function createPlaybackController({
     void buildPreparedSource(file)
       .then(source => {
         if (sequenceId !== state.playSequence || !dom.audioElement) {
-          tracePlayback('playback.play.new-source.skipped', {
+          log('playback.play.new-source.skipped', {
             reason: 'sequence-mismatch',
             sequenceId,
             statePlaySequence: state.playSequence,
@@ -1273,7 +1256,7 @@ export function createPlaybackController({
 
         setAudioSource(source);
         state.pendingStartOffset = getStartOffsetForPlayback(file, requestedOffset);
-        tracePlayback('playback.play.new-source', {
+        log('playback.play.new-source', {
           pendingStartOffset: state.pendingStartOffset,
           sequenceId,
           trackKey: getFileKey(file),
@@ -1283,7 +1266,7 @@ export function createPlaybackController({
       })
       .catch(error => {
         console.error('Failed to prepare playback source:', error);
-        tracePlayback('playback.play.new-source.failed', {
+        log('playback.play.new-source.failed', {
           error: summarizeError(error),
           sequenceId,
           trackKey: getFileKey(file),
@@ -1301,7 +1284,7 @@ export function createPlaybackController({
     state.pendingStartOffset = null;
     clearPreviewEndTarget();
     state.isPlaying = false;
-    tracePlayback('playback.pause', {
+    log('playback.pause', {
       offset: Number(state.offset.toFixed(3)),
     });
     ui.syncArtworkPlaybackState();
@@ -1314,13 +1297,13 @@ export function createPlaybackController({
   function startTrack(trackIndex) {
     if (typeof trackIndex !== 'number') {
       console.error('Cannot start track because the index is invalid:', trackIndex);
-      tracePlayback('playback.startTrack.failed', {
+      log('playback.startTrack.failed', {
         trackIndex,
       });
       return;
     }
 
-    tracePlayback('playback.startTrack', {
+    log('playback.startTrack', {
       trackIndex,
     });
     const file = state.files[trackIndex];
@@ -1344,7 +1327,7 @@ export function createPlaybackController({
     const file = state.files[state.index];
 
     if (!file || !dom.audioElement) {
-      tracePlayback('playback.preview-start-offset.skipped', {
+      log('playback.preview-start-offset.skipped', {
         hasAudioElement: Boolean(dom.audioElement),
         hasFile: Boolean(file),
       });
@@ -1361,7 +1344,7 @@ export function createPlaybackController({
 
     state.offset = nextOffset;
     state.pendingStartOffset = nextOffset;
-    tracePlayback('playback.preview-start-offset', {
+    log('playback.preview-start-offset', {
       offset: Number(nextOffset.toFixed(3)),
       trackKey: getFileKey(file),
     });
@@ -1376,7 +1359,7 @@ export function createPlaybackController({
         dom.audioElement.currentTime = nextOffset;
         state.pendingStartOffset = null;
       } catch (error) {
-        tracePlayback('playback.preview-start-offset.seek-failed', {
+        log('playback.preview-start-offset.seek-failed', {
           error: summarizeError(error),
           offset: Number(nextOffset.toFixed(3)),
           trackKey: getFileKey(file),
@@ -1433,7 +1416,7 @@ export function createPlaybackController({
     state.previewEndTrackKey = getFileKey(file);
     state.pendingStartOffset = previewStartTime;
 
-    tracePlayback('playback.preview-end-offset', {
+    log('playback.preview-end-offset', {
       endTime: Number(nextEndTime.toFixed(3)),
       previewStartTime: Number(previewStartTime.toFixed(3)),
       trackKey: getFileKey(file),
@@ -1449,7 +1432,7 @@ export function createPlaybackController({
         dom.audioElement.currentTime = previewStartTime;
         state.pendingStartOffset = null;
       } catch (error) {
-        tracePlayback('playback.preview-end-offset.seek-failed', {
+        log('playback.preview-end-offset.seek-failed', {
           endTime: Number(nextEndTime.toFixed(3)),
           error: summarizeError(error),
           previewStartTime: Number(previewStartTime.toFixed(3)),
@@ -1533,7 +1516,7 @@ export function createPlaybackController({
       state.isPlaying ||
       Boolean(dom.audioElement && !dom.audioElement.paused);
 
-    tracePlayback('playback.next.begin', {
+    log('playback.next.begin', {
       forceContinuePlaying,
       queueLength: queue.length,
       shouldContinuePlaying,
@@ -1541,7 +1524,7 @@ export function createPlaybackController({
 
     if (queue.length === 0) {
       console.warn('Cannot skip to the next track because the queue is empty');
-      tracePlayback('playback.next.skipped', {
+      log('playback.next.skipped', {
         reason: 'empty-queue',
       });
       return;
@@ -1550,7 +1533,7 @@ export function createPlaybackController({
     const nextIndex = findAdjacentPlayableTrackIndex('next');
 
     if (typeof nextIndex !== 'number') {
-      tracePlayback('playback.next.skipped', {
+      log('playback.next.skipped', {
         reason: 'missing-next-index',
       });
       return;
@@ -1560,7 +1543,7 @@ export function createPlaybackController({
     state.index = nextIndex;
     state.offset = 0;
     syncRepeatForCurrentTrack({ force: true });
-    tracePlayback('playback.next.selected', {
+    log('playback.next.selected', {
       nextIndex: state.index,
       queue,
     });
@@ -1585,14 +1568,14 @@ export function createPlaybackController({
 
     ui.resetArtworkSpin();
 
-    tracePlayback('playback.prev.begin', {
+    log('playback.prev.begin', {
       queueLength: queue.length,
       shouldContinuePlaying,
     });
 
     if (queue.length === 0) {
       console.warn('Cannot go to the previous track because the queue is empty');
-      tracePlayback('playback.prev.skipped', {
+      log('playback.prev.skipped', {
         reason: 'empty-queue',
       });
       return;
@@ -1622,13 +1605,13 @@ export function createPlaybackController({
         try {
           dom.audioElement.currentTime = 0;
         } catch (error) {
-          tracePlayback('playback.prev.restart-current.failed', {
+          log('playback.prev.restart-current.failed', {
             error: summarizeError(error),
           });
         }
       }
 
-      tracePlayback('playback.prev.restart-current', {
+      log('playback.prev.restart-current', {
         currentOffset: Number(currentOffset.toFixed(3)),
         threshold: PREVIOUS_TRACK_RESTART_THRESHOLD_SECONDS,
       });
@@ -1641,7 +1624,7 @@ export function createPlaybackController({
     const previousIndex = findAdjacentPlayableTrackIndex('prev');
 
     if (typeof previousIndex !== 'number') {
-      tracePlayback('playback.prev.skipped', {
+      log('playback.prev.skipped', {
         reason: 'missing-previous-index',
       });
       return;
@@ -1651,7 +1634,7 @@ export function createPlaybackController({
     state.index = previousIndex;
     state.offset = 0;
     syncRepeatForCurrentTrack({ force: true });
-    tracePlayback('playback.prev.selected', {
+    log('playback.prev.selected', {
       previousIndex: state.index,
       queue,
     });
@@ -1726,10 +1709,10 @@ export function createPlaybackController({
       return;
     }
 
-    tracePlayback('audio.events.bind');
+    log('audio.events.bind');
 
     dom.audioElement.addEventListener('play', () => {
-      tracePlayback('audio.event.play');
+      log('audio.event.play');
       const hasPlayableSource =
         Boolean(dom.audioElement.src) && dom.audioElement.src !== window.location.href;
 
@@ -1743,18 +1726,18 @@ export function createPlaybackController({
         const file = state.files[state.index];
 
         if (file && !state.isSettingSrc) {
-          tracePlayback('audio.event.play.bootstrap-source', {
+          log('audio.event.play.bootstrap-source', {
             trackKey: getFileKey(file),
           });
           state.isSettingSrc = true;
-          tracePlayback('audio.event.play.bootstrap-source.redirect');
+          log('audio.event.play.bootstrap-source.redirect');
 
           try {
             play();
-            tracePlayback('audio.event.play.bootstrap-source.success');
+            log('audio.event.play.bootstrap-source.success');
           } catch (error) {
             console.error('Failed to play from the play event:', error);
-            tracePlayback('audio.event.play.bootstrap-source.failed', {
+            log('audio.event.play.bootstrap-source.failed', {
               error: summarizeError(error),
             });
           } finally {
@@ -1765,7 +1748,7 @@ export function createPlaybackController({
     });
 
     dom.audioElement.addEventListener('playing', () => {
-      tracePlayback('audio.event.playing');
+      log('audio.event.playing');
       state.isInternalTransition = false;
       syncPendingStartOffset('audio.playing');
 
@@ -1776,11 +1759,11 @@ export function createPlaybackController({
       ) {
         try {
           dom.audioElement.currentTime = state.pendingStartOffset;
-          tracePlayback('audio.event.playing.offset-applied', {
+          log('audio.event.playing.offset-applied', {
             pendingStartOffset: state.pendingStartOffset,
           });
         } catch (error) {
-          tracePlayback('audio.event.playing.offset-failed', {
+          log('audio.event.playing.offset-failed', {
             error: summarizeError(error),
             pendingStartOffset: state.pendingStartOffset,
           });
@@ -1802,10 +1785,10 @@ export function createPlaybackController({
         return;
       }
 
-      tracePlayback('audio.event.pause');
+      log('audio.event.pause');
       if (state.isInternalTransition) {
         state.isInternalTransition = false;
-        tracePlayback('audio.event.pause.internal-transition');
+        log('audio.event.pause.internal-transition');
         return;
       }
 
@@ -1827,19 +1810,19 @@ export function createPlaybackController({
       ) {
         try {
           dom.audioElement.currentTime = state.pendingStartOffset;
-          tracePlayback('audio.event.loadedmetadata.offset-applied', {
+          log('audio.event.loadedmetadata.offset-applied', {
             pendingStartOffset: state.pendingStartOffset,
           });
         } catch (error) {
-          tracePlayback('audio.event.loadedmetadata.offset-failed', {
+          log('audio.event.loadedmetadata.offset-failed', {
             error: summarizeError(error),
             pendingStartOffset: state.pendingStartOffset,
           });
         }
       }
 
-      tracePlayback('audio.event.loadedmetadata');
-      tracePlayback('audio.event.loadedmetadata.offset-pending', {
+      log('audio.event.loadedmetadata');
+      log('audio.event.loadedmetadata.offset-pending', {
         pendingStartOffset: state.pendingStartOffset,
       });
 
@@ -1847,16 +1830,16 @@ export function createPlaybackController({
     });
 
     dom.audioElement.addEventListener('durationchange', () => {
-      tracePlayback('audio.event.durationchange');
+      log('audio.event.durationchange');
       syncMediaSession('audio.durationchange');
     });
 
     dom.audioElement.addEventListener('canplay', () => {
-      tracePlayback('audio.event.canplay');
+      log('audio.event.canplay');
     });
 
     dom.audioElement.addEventListener('seeked', () => {
-      tracePlayback('audio.event.seeked');
+      log('audio.event.seeked');
       state.offset = dom.audioElement.currentTime || 0;
       syncMediaSessionPosition('audio.seeked');
     });
@@ -1876,14 +1859,14 @@ export function createPlaybackController({
         try {
           dom.audioElement.currentTime = state.previewEndTime;
         } catch (error) {
-          tracePlayback('audio.event.timeupdate.preview-end.seek-failed', {
+          log('audio.event.timeupdate.preview-end.seek-failed', {
             error: summarizeError(error),
             previewEndTime: Number(state.previewEndTime.toFixed(3)),
             trackKey: currentTrackKey,
           });
         }
 
-        tracePlayback('audio.event.timeupdate.preview-end.pause', {
+        log('audio.event.timeupdate.preview-end.pause', {
           previewEndTime: Number(state.previewEndTime.toFixed(3)),
           trackKey: currentTrackKey,
         });
@@ -1903,7 +1886,7 @@ export function createPlaybackController({
         effectiveEndTime > 0 &&
         state.offset >= effectiveEndTime
       ) {
-        tracePlayback('audio.event.timeupdate.end-threshold', {
+        log('audio.event.timeupdate.end-threshold', {
           effectiveEndTime: Number(effectiveEndTime.toFixed(3)),
           offset: Number(state.offset.toFixed(3)),
           trackKey: getFileKey(file),
@@ -1930,10 +1913,10 @@ export function createPlaybackController({
       savePlayerState();
     };
 
-    tracePlayback('visibility.events.bind');
+    log('visibility.events.bind');
 
     document.addEventListener('visibilitychange', () => {
-      tracePlayback('document.visibilitychange', {
+      log('document.visibilitychange', {
         hidden: document.hidden,
       });
 

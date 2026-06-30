@@ -1,99 +1,50 @@
-const logEntries = [];
-const listeners = new Set();
-const originalConsole = {};
-let installed = false;
-let renderPending = false;
+import { getPlayerDom } from './dom.js';
 
-function formatLogValue(value) {
-  if (value instanceof Error) {
-    return value.stack || `${value.name}: ${value.message}`;
-  }
+const dom = getPlayerDom();
+let logStartTime;
 
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  try {
-    const serializedValue = JSON.stringify(value);
-    return serializedValue === undefined ? String(value) : serializedValue;
-  } catch {
-    return String(value);
-  }
+function formatLogTime() {
+  return ((performance.now() - logStartTime) / 1000).toFixed(3);
 }
 
-function emitLogEntry(entry) {
-  logEntries.push(entry);
+export function summarizeError(error) {
+  if (!error) {
+    return null;
+  }
 
-  if (renderPending) {
+  return {
+    code: error.code ?? null,
+    message: error.message ?? String(error),
+    name: error.name ?? 'Error',
+  };
+}
+
+export function bindDeveloperLog() {
+  dom.clearDeveloperLogBtn.onclick = () => {
+    dom.developerLogEl.value = '';
+  };
+
+  dom.developerLoggingToggleEl.onchange = () => {
+    if (dom.developerLoggingToggleEl.checked) {
+      logStartTime = performance.now();
+      log(`Log started: ${new Date().toLocaleString()}`);
+    } else {
+      log(`Log stopped: ${new Date().toLocaleString()}`);
+    }
+  };
+}
+
+export function log(event, details = {}) {
+  if (!dom.developerLoggingToggleEl.checked) {
     return;
   }
 
-  renderPending = true;
-  requestAnimationFrame(() => {
-    renderPending = false;
-    listeners.forEach(listener => listener(logEntries));
-  });
+  const message = Object.keys(details).length > 0
+    ? `${event} ${JSON.stringify(details)}`
+    : event;
+
+  console.log(message);
+  const line = `[${formatLogTime()}] ${message}`;
+  dom.developerLogEl.value += dom.developerLogEl.value ? `\n\n${line}` : line;
+  dom.developerLogEl.scrollTop = dom.developerLogEl.scrollHeight;
 }
-
-export function clearDeveloperLog() {
-  logEntries.length = 0;
-  listeners.forEach(listener => listener(logEntries));
-}
-
-function installConsoleLogCapture() {
-  if (installed) {
-    return;
-  }
-
-  installed = true;
-  const loggingToggle = document.getElementById('developerLoggingToggle');
-
-  ['log', 'info', 'warn', 'error', 'debug'].forEach(level => {
-    originalConsole[level] = console[level]?.bind(console);
-
-    console[level] = (...args) => {
-      if (level === 'error' || loggingToggle.checked) {
-        emitLogEntry({
-          level,
-          message: args.map(formatLogValue).join(' '),
-          time: new Date(),
-        });
-      }
-
-      if (level === 'error') {
-        originalConsole[level]?.(...args);
-      }
-    };
-  });
-}
-
-function formatLogTime(time) {
-  return time.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function renderDeveloperLog(logEl) {
-  logEl.textContent = logEntries
-    .map(entry => `[${formatLogTime(entry.time)}] ${entry.level}: ${entry.message}`)
-    .join('\n');
-
-  if (logEl.parentElement) {
-    logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
-  }
-}
-
-export function bindDeveloperLog(logEl) {
-  if (!logEl) {
-    return;
-  }
-
-  renderDeveloperLog(logEl);
-
-  const listener = () => renderDeveloperLog(logEl);
-  listeners.add(listener);
-}
-
-installConsoleLogCapture();
