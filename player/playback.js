@@ -295,16 +295,13 @@ export function createPlaybackController({
 
     const trackKey = getFileKey(file);
     const artworkSource = metadata.artwork || buildDefaultArtwork();
-    const artworkSessionSource = `${artworkSource}${
-      artworkSource.includes('#') ? '&' : '#'
-    }ms=${mediaSessionRevision}`;
     const artworkType = artworkSource.match(/^data:([^;,]+)/)?.[1] ?? null;
     const mediaMetadataPayload = {
       album: playlistName,
       artist: metadata.artist || playlistName,
       artwork: [
         {
-          src: artworkSessionSource,
+          src: artworkSource,
           sizes: '512x512',
           ...(artworkType ? { type: artworkType } : {}),
         },
@@ -316,7 +313,7 @@ export function createPlaybackController({
       title: mediaMetadataPayload.title,
       artist: mediaMetadataPayload.artist,
       album: mediaMetadataPayload.album,
-      artworkSessionSource,
+      artworkSource,
     });
 
     if (state.mediaSessionSignature === mediaSessionSignature) {
