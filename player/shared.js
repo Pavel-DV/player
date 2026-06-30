@@ -1,6 +1,6 @@
 const AUDIO_FILE_PATTERN = /\.(mp3|m4a|wav|ogg|flac)$/i;
 const fileKeyOverrides = new WeakMap();
-export const DEFAULT_ARTWORK_URL = '/icons/icon512.png';
+export const DEFAULT_ARTWORK_URL = 'icons/icon512.png';
 
 export function isAudioFile(file) {
   return AUDIO_FILE_PATTERN.test(file?.name ?? '');
