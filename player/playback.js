@@ -1067,6 +1067,10 @@ export function createPlaybackController({
       return;
     }
 
+    if (state.previewEndTrackKey) {
+      return;
+    }
+
     dom.audioElement.onended = () => {
       clearPreviewEndTarget();
       tracePlayback('audio.onended', {

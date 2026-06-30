@@ -1,1 +1,1 @@
-export const playerBuildId = '295';
+export const playerBuildId = '296';
