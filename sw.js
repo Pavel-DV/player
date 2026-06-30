@@ -78,9 +78,12 @@ async function ensureCacheCurrent() {
 
       if (buildId && buildId !== await getCachedBuildId(cache)) {
         await updateCache();
+        return true;
       }
+
+      return false;
     })()
-    .catch(() => {})
+    .catch(() => false)
     .finally(() => {
         cacheUpdatePromise = null;
       });
@@ -117,7 +120,12 @@ self.addEventListener('fetch', e => {
     }
 
     if (isNavigation) {
-      await ensureCacheCurrent();
+      if (await ensureCacheCurrent()) {
+        return new Response(
+          '<!doctype html><meta charset="utf-8"><script>location.reload()</script>',
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
     }
 
     if (ASSET_URLS.has(url.href)) {
