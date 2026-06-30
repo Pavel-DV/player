@@ -1,4 +1,4 @@
-import { buildDefaultArtwork, createPlaylistId } from './shared.js';
+import { DEFAULT_ARTWORK_URL, createPlaylistId } from './shared.js';
 import { createPlaylistDragController } from './playlist-drag.js';
 
 const EMPTY_METADATA = {
@@ -354,7 +354,7 @@ export function createUiController({
 
     if (dom.trackArtworkEl) {
       if (freshCurrentFile) {
-        dom.trackArtworkEl.src = metadata.artwork || buildDefaultArtwork();
+        dom.trackArtworkEl.src = metadata.artwork || DEFAULT_ARTWORK_URL;
         dom.trackArtworkEl.style.visibility = 'visible';
         syncArtworkPlaybackState();
       } else {

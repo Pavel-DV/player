@@ -1,5 +1,5 @@
 import {
-  buildDefaultArtwork,
+  DEFAULT_ARTWORK_URL,
   getPlaylistItemOrder,
   setFileKey,
 } from './shared.js';
@@ -294,7 +294,7 @@ export function createPlaybackController({
     }
 
     const trackKey = getFileKey(file);
-    const artworkSource = metadata.artwork || buildDefaultArtwork();
+    const artworkSource = metadata.artwork || DEFAULT_ARTWORK_URL;
     const artworkType = artworkSource.match(/^data:([^;,]+)/)?.[1] ?? null;
     const mediaMetadataPayload = {
       album: playlistName,

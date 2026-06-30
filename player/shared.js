@@ -1,6 +1,6 @@
 const AUDIO_FILE_PATTERN = /\.(mp3|m4a|wav|ogg|flac)$/i;
 const fileKeyOverrides = new WeakMap();
-let cachedDefaultArtwork = null;
+export const DEFAULT_ARTWORK_URL = '/icons/icon512.png';
 
 export function isAudioFile(file) {
   return AUDIO_FILE_PATTERN.test(file?.name ?? '');
@@ -125,41 +125,4 @@ export function getQueueIndices(state) {
     .map((file, index) => ({ index, key: getFileKey(file) }))
     .filter(item => canPlayTrack(item.key))
     .map(item => item.index);
-}
-
-export function buildDefaultArtwork() {
-  if (cachedDefaultArtwork) {
-    return cachedDefaultArtwork;
-  }
-
-  if (typeof document !== 'undefined') {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-
-    const context = canvas.getContext('2d');
-
-    if (context) {
-      context.fillStyle = '#1a1a1a';
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = '#23fd23';
-      context.font =
-        '700 280px -apple-system, BlinkMacSystemFont, system-ui, sans-serif';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.fillText('V', canvas.width / 2, 284);
-      cachedDefaultArtwork = canvas.toDataURL('image/png');
-      return cachedDefaultArtwork;
-    }
-  }
-
-  const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">',
-    '<rect width="512" height="512" fill="#1a1a1a"/>',
-    '<text x="256" y="340" font-family="system-ui,-apple-system,sans-serif" font-size="280" font-weight="700" fill="#23fd23" text-anchor="middle">V</text>',
-    '</svg>',
-  ].join('');
-
-  cachedDefaultArtwork = `data:image/svg+xml;base64,${window.btoa(svg)}`;
-  return cachedDefaultArtwork;
 }
