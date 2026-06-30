@@ -1460,10 +1460,6 @@ export function createPlaybackController({
       syncMediaSession('playback.preview-end-offset');
       ensurePlaybackAudioSession('playback.preview-end-offset');
       setupMediaSessionHandlers();
-      bindEndedHandler(
-        state.playSequence,
-        'playback.preview-end-offset.resume-existing-source'
-      );
       void playForSequence(state.playSequence, 'Failed to preview end playback:');
       return;
     }
