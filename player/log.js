@@ -1,7 +1,9 @@
 const logEntries = [];
+const MAX_LOG_ENTRIES = 300;
 const listeners = new Set();
 const originalConsole = {};
 let installed = false;
+let renderPending = false;
 
 function formatLogValue(value) {
   if (value instanceof Error) {
@@ -22,7 +24,20 @@ function formatLogValue(value) {
 
 function emitLogEntry(entry) {
   logEntries.push(entry);
-  listeners.forEach(listener => listener(logEntries));
+
+  if (logEntries.length > MAX_LOG_ENTRIES) {
+    logEntries.splice(0, logEntries.length - MAX_LOG_ENTRIES);
+  }
+
+  if (renderPending) {
+    return;
+  }
+
+  renderPending = true;
+  requestAnimationFrame(() => {
+    renderPending = false;
+    listeners.forEach(listener => listener(logEntries));
+  });
 }
 
 export function clearDeveloperLog() {
@@ -36,18 +51,21 @@ function installConsoleLogCapture() {
   }
 
   installed = true;
+  const loggingToggle = document.getElementById('developerLoggingToggle');
 
   ['log', 'info', 'warn', 'error', 'debug'].forEach(level => {
     originalConsole[level] = console[level]?.bind(console);
 
     console[level] = (...args) => {
-      if (level === 'error' || document.getElementById('developerLoggingToggle').checked) {
+      if (level === 'error' || loggingToggle.checked) {
         emitLogEntry({
           level,
           message: args.map(formatLogValue).join(' '),
           time: new Date(),
         });
+      }
 
+      if (level === 'error') {
         originalConsole[level]?.(...args);
       }
     };
