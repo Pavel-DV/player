@@ -359,15 +359,6 @@ export function createPlaybackController({
     return Math.max(getMinTrackEndTime(duration, trackStartOffset), duration - endOffset);
   }
 
-  function getTrackPlaybackEndTime(file, duration = NaN) {
-    if (!(Number.isFinite(duration) && duration > 0)) {
-      return Infinity;
-    }
-
-    const trackEndTime = getTrackEndTime(file, duration);
-    return trackEndTime > 0 ? trackEndTime : duration;
-  }
-
   function clearPreviewEndTarget() {
     state.previewEndTime = null;
     state.previewEndTrackKey = null;
@@ -1876,8 +1867,8 @@ export function createPlaybackController({
       }
 
       const effectiveEndTime = file
-        ? getTrackPlaybackEndTime(file, dom.audioElement.duration)
-        : Infinity;
+        ? getTrackEndTime(file, dom.audioElement.duration)
+        : 0;
 
       if (
         file &&
