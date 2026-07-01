@@ -220,6 +220,10 @@ async function refreshApp() {
 
                 channel.port1.onmessage = event => {
                     if (event.data?.ok) {
+                        if (event.data.buildId) {
+                            alert(`New update! ${event.data.buildId}`);
+                        }
+
                         resolve();
                     } else {
                         reject(new Error(event.data?.error || 'Failed to update cache'));

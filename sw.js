@@ -75,15 +75,16 @@ async function ensureCacheCurrent() {
       const cache = await caches.open(CACHE_NAME);
       const response = await fetchFresh(BUILD_ID_ASSET);
       const buildId = parseBuildId(await response.text());
+      const cachedBuildId = await getCachedBuildId(cache);
 
-      if (buildId && buildId !== await getCachedBuildId(cache)) {
+      if (buildId && buildId !== cachedBuildId) {
         await updateCache();
-        return true;
+        return buildId;
       }
 
-      return false;
+      return null;
     })()
-    .catch(() => false)
+    .catch(() => null)
     .finally(() => {
         cacheUpdatePromise = null;
       });
@@ -120,9 +121,11 @@ self.addEventListener('fetch', e => {
     }
 
     if (isNavigation) {
-      if (await ensureCacheCurrent()) {
+      const buildId = await ensureCacheCurrent();
+
+      if (buildId) {
         return new Response(
-          '<!doctype html><meta charset="utf-8"><script>location.reload()</script>',
+          `<!doctype html><meta charset="utf-8"><script>alert('New update! ${buildId}');location.reload()</script>`,
           { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
         );
       }
@@ -165,8 +168,8 @@ self.addEventListener('message', e => {
 
   e.waitUntil((async () => {
     try {
-      await updateCache();
-      e.ports[0]?.postMessage({ ok: true });
+      const buildId = await ensureCacheCurrent();
+      e.ports[0]?.postMessage({ ok: true, buildId });
     } catch (error) {
       e.ports[0]?.postMessage({ ok: false, error: error.message });
       throw error;
