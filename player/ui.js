@@ -302,6 +302,7 @@ export function createUiController({
       [...dom.listEl.children].forEach(listItem => {
         const span = listItem.querySelector('span');
         const itemIndex = Number(listItem.dataset.fileIndex);
+        const trackKey = getFileKey(state.files[itemIndex]);
 
         if (!span) {
           return;
@@ -311,6 +312,8 @@ export function createUiController({
 
         if (itemIndex === state.index && state.isPlaying) {
           span.style.color = '#23fd23';
+        } else if (!state.playlists.some(playlist => playlist.items?.includes(trackKey))) {
+          span.style.color = '#888';
         } else {
           span.style.color = '';
         }
