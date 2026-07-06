@@ -52,7 +52,7 @@ log('Player build:', window.__playerBuildId);
 const buildVersionEl = document.getElementById('buildVersion');
 
 if (buildVersionEl) {
-  buildVersionEl.textContent = `Build ${window.__playerBuildId}`;
+  buildVersionEl.textContent = `V: ${window.__playerBuildId}`;
 }
 const { playlists, currentPlaylistId } = loadPlaylists();
 
