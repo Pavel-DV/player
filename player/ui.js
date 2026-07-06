@@ -25,7 +25,6 @@ export function createUiController({
   actions,
 }) {
   const playlistButtons = new Map();
-  const playlistNameButtons = new Map();
   let librarySearchQuery = '';
 
   function getCurrentPlaylist() {
@@ -492,10 +491,7 @@ export function createUiController({
       const isCurrentPlaylist = playlistId === state.currentPlaylistId;
       const isPlaylistPlaying = isCurrentPlaylist && state.isPlaying;
       button.setAttribute('data-icon', isPlaylistPlaying ? 'pause' : 'play');
-    });
-    playlistNameButtons.forEach((button, playlistId) => {
-      button.style.color =
-        playlistId === state.currentPlaylistId && state.isPlaying ? '#23fd23' : '';
+      button.previousElementSibling.style.color = isPlaylistPlaying ? '#23fd23' : '';
     });
   }
 
@@ -679,7 +675,6 @@ export function createUiController({
 
     dom.playlistsEl.innerHTML = '';
     playlistButtons.clear();
-    playlistNameButtons.clear();
     renderCurrentPlaylistName();
 
     state.playlists.forEach(playlist => {
@@ -719,7 +714,6 @@ export function createUiController({
       const isCurrentPlaylist = playlist.id === state.currentPlaylistId;
       const isPlaylistPlaying = isCurrentPlaylist && state.isPlaying;
       selectButton.style.color = isPlaylistPlaying ? '#23fd23' : '';
-      playlistNameButtons.set(playlist.id, selectButton);
 
       const playPauseButton = document.createElement('button');
       playPauseButton.style.width = '36px';
