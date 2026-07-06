@@ -902,6 +902,8 @@ export function createPlaybackController({
 
     const previousObjectUrl = state.currentObjectUrl;
     state.currentObjectUrl = URL.createObjectURL(file);
+    // Car Bluetooth reads the title when Safari receives a new audio source.
+    syncMediaMetadata(file, {}, getCurrentPlaylistName(), 'audio.source.set');
     dom.audioElement.src = state.currentObjectUrl;
     currentSourceTrackKey = getFileKey(file);
     currentSourceNormalize = state.normalize;
