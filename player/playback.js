@@ -174,7 +174,7 @@ export function createPlaybackController({
       if (duration > 0 && typeof navigator.mediaSession.setPositionState === 'function') {
         navigator.mediaSession.setPositionState({
           duration: Math.max(0, duration),
-          playbackRate: Math.max(0.1, playbackRate),
+          playbackRate: Math.min(1, Math.max(0.1, playbackRate)),
           position: Math.min(position, duration),
         });
 
@@ -241,7 +241,7 @@ export function createPlaybackController({
     try {
       navigator.mediaSession.setPositionState({
         duration: Math.max(0, duration),
-        playbackRate: Math.max(0.1, playbackRate),
+        playbackRate: Math.min(1, Math.max(0.1, playbackRate)),
         position: Math.min(position, duration),
       });
       log('mediaSession.position.updated', {

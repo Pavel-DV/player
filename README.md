@@ -3,7 +3,7 @@
 ```
 e:
 cd E:\player
-npx http-server . -S -C 192.168.4.26.pem -K 192.168.4.26-key.pem -a 0.0.0.0 -p 8443
+npx http-server . --no-dotfiles -d false --log-ip -S -C 192.168.4.26.pem -K 192.168.4.26-key.pem -p 8443
 ```
 
 ### iOS debug:
