@@ -1,1 +1,1 @@
-export const playerBuildId = 'cap media rate';
+export const playerBuildId = 'playlist mode tags';

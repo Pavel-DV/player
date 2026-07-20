@@ -279,6 +279,7 @@ export function createPlaybackController({
     const trackKey = getFileKey(file);
     const artworkSource = metadata.artwork || DEFAULT_ARTWORK_URL;
     const artworkType = artworkSource.match(/^data:([^;,]+)/)?.[1] ?? null;
+    playlistName = `${playlistName}${state.shuffle ? ' [S]' : ''}${state.allowExplicit ? ' [E]' : ''}`;
     const mediaMetadataPayload = {
       album: playlistName,
       artist: metadata.artist || playlistName,
@@ -1662,6 +1663,7 @@ export function createPlaybackController({
       normalize: state.normalize,
       allowExplicit: state.allowExplicit,
     });
+    void ui.highlight();
   }
 
   function setNormalize(enabled) {
@@ -1695,6 +1697,7 @@ export function createPlaybackController({
       normalize: state.normalize,
       allowExplicit: state.allowExplicit,
     });
+    void ui.highlight();
   }
 
   function bindAudioEvents() {
