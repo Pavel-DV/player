@@ -654,6 +654,8 @@ export function createUiController({
       opfsDeleteButton.onclick = async event => {
         event.stopPropagation();
 
+        if (!window.confirm(`Delete track from library?\nPlaylists: ${state.playlists.filter(playlist => playlist.items?.includes(key)).length}`)) return;
+
         await actions.removeFromLibrary?.(itemIndex);
       };
 
