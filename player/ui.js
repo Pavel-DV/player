@@ -468,6 +468,11 @@ export function createUiController({
     }
 
     const key = getFileKey(file);
+
+    if (!confirm('Remove track from playlist?')) {
+      return;
+    }
+
     const removingCurrentTrack =
       key === (state.files[state.index] ? getFileKey(state.files[state.index]) : null);
     const queueBeforeRemoval = removingCurrentTrack ? getQueueIndices(state) : [];

@@ -1,1 +1,1 @@
-export const playerBuildId = 'file input';
+export const playerBuildId = 'confirm playlist delete';
