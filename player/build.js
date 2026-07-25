@@ -1,1 +1,1 @@
-export const playerBuildId = 'start preview pause';
+export const playerBuildId = 'file input';
