@@ -1,1 +1,1 @@
-export const playerBuildId = 'paused scrubbing';
+export const playerBuildId = 'start preview pause';

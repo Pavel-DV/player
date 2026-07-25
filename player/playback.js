@@ -1333,14 +1333,24 @@ export function createPlaybackController({
       offset,
       dom.audioElement.duration
     );
+    const trackKey = getFileKey(file);
+    const shouldPausePreview =
+      dom.audioElement.paused || state.previewEndTrackKey === trackKey;
 
     clearPreviewEndTarget();
 
     state.offset = nextOffset;
     state.pendingStartOffset = nextOffset;
+    if (shouldPausePreview) {
+      state.previewEndTime =
+        Number.isFinite(dom.audioElement.duration) && dom.audioElement.duration > 0
+          ? Math.min(dom.audioElement.duration, nextOffset + 1)
+          : nextOffset + 1;
+      state.previewEndTrackKey = trackKey;
+    }
     log('playback.preview-start-offset', {
       offset: Number(nextOffset.toFixed(3)),
-      trackKey: getFileKey(file),
+      trackKey,
     });
 
     const hasPlayableCurrentSource =
