@@ -565,7 +565,7 @@ export function createTrackRotationController({
     });
 
     dom.trackArtworkEl.addEventListener('pointerdown', event => {
-      if ((!knobState.activeControl && !state.isPlaying) || !knobState.currentTrackKey) {
+      if (!knobState.currentTrackKey) {
         return;
       }
 
