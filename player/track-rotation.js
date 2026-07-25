@@ -35,7 +35,6 @@ export function createTrackRotationController({
     currentStartOffset: 0,
     dragAngleDelta: 0,
     dragLastAngle: 0,
-    dragStartAnimationTime: 0,
     dragStartPlaybackTime: 0,
     dragLastPlaybackSeekTime: 0,
     dragPlaybackTime: 0,
@@ -147,6 +146,22 @@ export function createTrackRotationController({
     }
 
     return delta;
+  }
+
+  function setArtworkEditAngle(angle) {
+    dom.trackArtworkEl.style.transform = `rotate(${angle}rad)`;
+  }
+
+  function syncArtworkToActiveControl() {
+    if (knobState.activeControl === 'start') {
+      setArtworkEditAngle(knobState.currentStartOffset / ROTATE_SECONDS_PER_RADIAN);
+    } else if (knobState.activeControl === 'end') {
+      setArtworkEditAngle(-getEffectiveTrackEndTime() / ROTATE_SECONDS_PER_RADIAN);
+    } else if (knobState.activeControl === 'gain') {
+      setArtworkEditAngle((knobState.currentGain - 1) / ROTATE_GAIN_PER_RADIAN);
+    } else if (knobState.activeControl === 'repeat') {
+      setArtworkEditAngle(knobState.currentRepeatCount - 1);
+    }
   }
 
   function armPlaybackRateStopTimer() {
@@ -337,8 +352,12 @@ export function createTrackRotationController({
       Boolean(knobState.activeControl)
     );
     if (!knobState.activeControl) {
+      dom.trackArtworkEl.style.transform = '';
+      syncArtworkToPlayback();
       const animation = dom.trackArtworkEl.getAnimations()[0];
       state.isPlaying ? animation?.play() : animation?.pause();
+    } else if (!knobState.isActive) {
+      syncArtworkToActiveControl();
     }
   }
 
@@ -559,16 +578,12 @@ export function createTrackRotationController({
         knobState.activeControl === 'gain'
           ? knobState.currentGain
           : knobState.activeControl === 'repeat'
-            ? knobState.currentRepeatVisualValue
+            ? knobState.currentRepeatCount
             : knobState.activeControl === 'end'
               ? getEffectiveTrackEndTime()
             : knobState.currentStartOffset;
-      if (knobState.activeControl) {
-        dom.trackArtworkEl.classList.add('adjusting');
-        dom.trackArtworkEl.style.transform = 'rotate(0rad)';
-      } else {
+      if (!knobState.activeControl) {
         const animation = dom.trackArtworkEl.getAnimations()[0];
-        knobState.dragStartAnimationTime = animation.currentTime || 0;
         knobState.dragStartPlaybackTime = dom.audioElement.currentTime || 0;
         knobState.dragLastPlaybackSeekTime = 0;
         knobState.dragPlaybackTime = knobState.dragStartPlaybackTime;
@@ -597,11 +612,6 @@ export function createTrackRotationController({
       if (!knobState.activeControl) {
         const animation = dom.trackArtworkEl.getAnimations()[0];
         const duration = animation.effect.getTiming().duration;
-        const time =
-          (knobState.dragStartAnimationTime +
-            (knobState.dragAngleDelta / (Math.PI * 2)) * duration) %
-          duration;
-        animation.currentTime = (time + duration) % duration;
         const trackDuration = getCurrentTrackDuration();
         const nextTime =
           knobState.dragStartPlaybackTime +
@@ -611,6 +621,14 @@ export function createTrackRotationController({
           Number.isFinite(trackDuration) ? trackDuration : Infinity,
           Math.max(0, nextTime)
         );
+        knobState.dragAngleDelta =
+          ((knobState.dragPlaybackTime - knobState.dragStartPlaybackTime) /
+            ROTATE_PLAYBACK_SECONDS_PER_REVOLUTION) *
+          Math.PI * 2;
+        animation.currentTime =
+          ((knobState.dragPlaybackTime % ROTATE_PLAYBACK_SECONDS_PER_REVOLUTION) /
+            ROTATE_PLAYBACK_SECONDS_PER_REVOLUTION) *
+          duration;
         state.offset = knobState.dragPlaybackTime;
         const now = Date.now();
         if (now - knobState.dragLastPlaybackSeekTime >= ROTATE_PLAYBACK_SEEK_INTERVAL_MS) {
@@ -619,13 +637,13 @@ export function createTrackRotationController({
         }
         dom.audioElement.preservesPitch = false;
         dom.audioElement.webkitPreservesPitch = false;
-        dom.audioElement.playbackRate = angleDelta < 0 && knobState.dragPlaybackTime > 0 ? -4 : 4;
+        dom.audioElement.playbackRate =
+          angleDelta < 0 && knobState.dragPlaybackTime <= 0
+            ? 0.5
+            : angleDelta < 0 ? -4 : 4;
         armPlaybackRateStopTimer();
         return;
       }
-
-      dom.trackArtworkEl.style.transform =
-        `rotate(${knobState.dragAngleDelta}rad)`;
 
       if (knobState.activeControl === 'start') {
         const nextOffset = Number(
@@ -635,6 +653,9 @@ export function createTrackRotationController({
             getCurrentTrackDuration()
           ).toFixed(3)
         );
+        knobState.dragAngleDelta =
+          (nextOffset - knobState.dragStartValue) / ROTATE_SECONDS_PER_RADIAN;
+        setArtworkEditAngle(nextOffset / ROTATE_SECONDS_PER_RADIAN);
 
         if (nextOffset === knobState.currentStartOffset) {
           return;
@@ -657,6 +678,9 @@ export function createTrackRotationController({
             knobState.currentStartOffset
           ).toFixed(3)
         );
+        knobState.dragAngleDelta =
+          (knobState.dragStartValue - nextEndTime) / ROTATE_SECONDS_PER_RADIAN;
+        setArtworkEditAngle(-nextEndTime / ROTATE_SECONDS_PER_RADIAN);
 
         if (nextEndTime === knobState.currentEndTime) {
           return;
@@ -671,12 +695,15 @@ export function createTrackRotationController({
       }
 
       if (knobState.activeControl === 'gain') {
-        const nextGain = Number(
-          normalizeTrackGain(
-            knobState.dragStartValue +
-              knobState.dragAngleDelta * ROTATE_GAIN_PER_RADIAN
-          ).toFixed(2)
+        const nextGainValue = normalizeTrackGain(
+          knobState.dragStartValue +
+            knobState.dragAngleDelta * ROTATE_GAIN_PER_RADIAN
         );
+        const nextGain = Number(nextGainValue.toFixed(2));
+        knobState.dragAngleDelta =
+          (nextGainValue - knobState.dragStartValue) /
+          ROTATE_GAIN_PER_RADIAN;
+        setArtworkEditAngle((nextGainValue - 1) / ROTATE_GAIN_PER_RADIAN);
 
         if (nextGain === knobState.currentGain) {
           return;
@@ -693,6 +720,9 @@ export function createTrackRotationController({
         const nextRepeatVisualValue = normalizeTrackRepeatVisualValue(
           knobState.dragStartValue + knobState.dragAngleDelta
         );
+        knobState.dragAngleDelta =
+          nextRepeatVisualValue - knobState.dragStartValue;
+        setArtworkEditAngle(nextRepeatVisualValue - 1);
         const nextRepeatCount = normalizeTrackRepeatCount(
           nextRepeatVisualValue
         );
