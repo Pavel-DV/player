@@ -203,9 +203,7 @@ self.addEventListener('message', e => {
 
   e.waitUntil((async () => {
     try {
-      const buildId = e.data === 'APPLY_UPDATE'
-        ? await applyUpdate()
-        : await ensureCacheCurrent();
+      const buildId = await applyUpdate();
       e.ports[0]?.postMessage({ ok: true, buildId });
     } catch (error) {
       e.ports[0]?.postMessage({ ok: false, error: error.message });
