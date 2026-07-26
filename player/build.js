@@ -1,1 +1,1 @@
-export const playerBuildId = 'update ok page';
+export const playerBuildId = 'animated artist fallback';

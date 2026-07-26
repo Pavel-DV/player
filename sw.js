@@ -9,6 +9,7 @@ const ASSETS = [
   'index.html',
   'manifest.json',
   'player.js',
+  'player/artist-animation.js',
   'player/build.js',
   'player/dom.js',
   'player/library.js',

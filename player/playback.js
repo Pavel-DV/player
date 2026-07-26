@@ -4,6 +4,7 @@ import {
   setFileKey,
 } from './shared.js';
 import { analyzeNormalization } from './normalization.js';
+import { createArtistAnimation } from './artist-animation.js';
 import {
   summarizeError,
   log,
@@ -55,6 +56,8 @@ export function createPlaybackController({
   let hasLoggedPlaybackAudioSessionReady = false;
   let hasLoggedPlaybackAudioSessionUnavailable = false;
   let mediaSessionRevision = 0;
+  let mediaMetadataUsesAnimatedArtist = false;
+  const nextAnimatedArtist = createArtistAnimation();
   let testToneAudioContext = null;
   let testToneAudio = null;
 
@@ -272,6 +275,7 @@ export function createPlaybackController({
     if (!file) {
       navigator.mediaSession.metadata = null;
       state.mediaSessionSignature = null;
+      mediaMetadataUsesAnimatedArtist = false;
       log('mediaSession.metadata.cleared', { source });
       return;
     }
@@ -280,9 +284,10 @@ export function createPlaybackController({
     const artworkSource = metadata.artwork || DEFAULT_ARTWORK_URL;
     const artworkType = artworkSource.match(/^data:([^;,]+)/)?.[1] ?? null;
     playlistName = `${playlistName}${state.shuffle ? ' [S]' : ''}${state.allowExplicit ? ' [E]' : ''}`;
+    mediaMetadataUsesAnimatedArtist = !metadata.artist;
     const mediaMetadataPayload = {
       album: playlistName,
-      artist: metadata.artist || playlistName,
+      artist: metadata.artist || nextAnimatedArtist(),
       artwork: [
         {
           src: artworkSource,
@@ -313,6 +318,14 @@ export function createPlaybackController({
       title: mediaMetadataPayload.title,
       trackKey,
     });
+  }
+
+  function syncAnimatedArtistMetadata() {
+    if (!mediaMetadataUsesAnimatedArtist) {
+      return;
+    }
+
+    navigator.mediaSession.metadata.artist = nextAnimatedArtist();
   }
 
   function getCurrentPlaylistName() {
@@ -1852,6 +1865,7 @@ export function createPlaybackController({
 
     dom.audioElement.addEventListener('timeupdate', () => {
       state.offset = dom.audioElement.currentTime || 0;
+      syncAnimatedArtistMetadata();
 
       const file = state.files[state.index];
       const currentTrackKey = file ? getFileKey(file) : null;
