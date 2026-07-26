@@ -1,1 +1,1 @@
-export const playerBuildId = 'confirm playlist delete';
+export const playerBuildId = 'update ok page';

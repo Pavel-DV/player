@@ -1,6 +1,7 @@
 const CACHE_NAME = 'player';
 const BUILD_ID_ASSET = 'player/build.js';
 const BUILD_ID_CACHE_KEY = new URL('player-build-id', self.registration.scope).href;
+const SKIP_UPDATE_CHECK_KEY = new URL('player-skip-update-check', self.registration.scope).href;
 const ASSETS = [
   '.',
   'favicon.ico',
@@ -52,6 +53,18 @@ async function getCachedBuildId(cache) {
   return response ? response.text() : null;
 }
 
+async function shouldSkipUpdateCheck() {
+  const cache = await caches.open(CACHE_NAME);
+  const response = await cache.match(SKIP_UPDATE_CHECK_KEY);
+
+  if (!response) {
+    return false;
+  }
+
+  await cache.delete(SKIP_UPDATE_CHECK_KEY);
+  return true;
+}
+
 async function updateCache() {
   const cache = await caches.open(CACHE_NAME);
   const responses = await Promise.all(ASSETS.map(fetchFresh));
@@ -67,22 +80,31 @@ async function updateCache() {
   if (buildId) {
     await cache.put(BUILD_ID_CACHE_KEY, new Response(buildId));
   }
+
+  return buildId;
 }
 
-async function ensureCacheCurrent() {
+async function checkForUpdate() {
+  const cache = await caches.open(CACHE_NAME);
+  const response = await fetchFresh(BUILD_ID_ASSET);
+  const buildId = parseBuildId(await response.text());
+  const cachedBuildId = await getCachedBuildId(cache);
+
+  return buildId && buildId !== cachedBuildId ? buildId : null;
+}
+
+async function applyUpdate() {
   if (!cacheUpdatePromise) {
     cacheUpdatePromise = (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const response = await fetchFresh(BUILD_ID_ASSET);
-      const buildId = parseBuildId(await response.text());
-      const cachedBuildId = await getCachedBuildId(cache);
+      const buildId = await updateCache();
 
-      if (buildId && buildId !== cachedBuildId) {
-        await updateCache();
-        return buildId;
+      if (buildId) {
+        const cache = await caches.open(CACHE_NAME);
+
+        await cache.put(SKIP_UPDATE_CHECK_KEY, new Response('1'));
       }
 
-      return null;
+      return buildId;
     })()
     .catch(() => null)
     .finally(() => {
@@ -91,6 +113,11 @@ async function ensureCacheCurrent() {
   }
 
   return cacheUpdatePromise;
+}
+
+async function ensureCacheCurrent() {
+  const buildId = await checkForUpdate().catch(() => null);
+  return buildId ? applyUpdate() : null;
 }
 
 self.addEventListener('install', e => {
@@ -121,11 +148,18 @@ self.addEventListener('fetch', e => {
     }
 
     if (isNavigation) {
-      const buildId = await ensureCacheCurrent();
-
-      if (buildId) {
+      if (!await shouldSkipUpdateCheck() && await checkForUpdate().catch(() => null)) {
         return new Response(
-          `<!doctype html><meta charset="utf-8"><script>alert('New update! ${buildId}');location.reload()</script>`,
+          `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#000;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont;display:flex;align-items:center;justify-content:center;height:100vh"><script>
+            const channel = new MessageChannel();
+            channel.port1.onmessage = e => {
+              if (!e.data?.ok) return;
+              document.body.innerHTML = '<div style="text-align:center;padding:20px"><div id=updateMessage style="font-size:22px;font-weight:700;margin-bottom:20px"></div><button id=updateOk style="padding:0;font-size:20px;width:52px;height:52px;background:#333;color:#e0e0e0;border:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;line-height:1">OK</button></div>';
+              document.getElementById('updateMessage').textContent = 'New update: "' + e.data.buildId + '"!';
+              document.getElementById('updateOk').onclick = () => location.reload();
+            };
+            navigator.serviceWorker.controller.postMessage('APPLY_UPDATE', [channel.port2]);
+          </script>`,
           { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
         );
       }
@@ -162,13 +196,15 @@ self.addEventListener('fetch', e => {
 });
 
 self.addEventListener('message', e => {
-  if (e.data !== 'UPDATE_CACHE') {
+  if (e.data !== 'UPDATE_CACHE' && e.data !== 'APPLY_UPDATE') {
     return;
   }
 
   e.waitUntil((async () => {
     try {
-      const buildId = await ensureCacheCurrent();
+      const buildId = e.data === 'APPLY_UPDATE'
+        ? await applyUpdate()
+        : await ensureCacheCurrent();
       e.ports[0]?.postMessage({ ok: true, buildId });
     } catch (error) {
       e.ports[0]?.postMessage({ ok: false, error: error.message });

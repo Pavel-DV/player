@@ -23,3 +23,4 @@ cd E:\player
 mkcert 192.168.4.26 localhost 127.0.0.1
 // mkcert -CAROOT   # where is the cert
 ```
+It will expire on 25 October 2028
