@@ -1,1 +1,1 @@
-export const playerBuildId = 'animated artist fallback';
+export const playerBuildId = 'pwa install prompt';
