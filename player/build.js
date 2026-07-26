@@ -1,1 +1,1 @@
-export const playerBuildId = 'pwa install prompt';
+export const playerBuildId = 'more faces';
