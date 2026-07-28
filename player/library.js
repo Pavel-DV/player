@@ -11,7 +11,6 @@ export function createLibraryController({
   deletePersistedTrack,
   loadPersistedLibrary,
   persistLibrary,
-  repairPersistedLibrary,
   savePlaylists,
   renderList,
   renderPlaylists,
@@ -246,71 +245,6 @@ export function createLibraryController({
     return true;
   }
 
-  async function repairLibrary() {
-    const repairedFiles = await repairPersistedLibrary?.();
-
-    if (!Array.isArray(repairedFiles) || repairedFiles.length === 0) {
-      return 0;
-    }
-
-    const cleanKeys = new Set(repairedFiles.map(file => getFileKey(file)));
-    let brokenPlaylistItems = 0;
-    let playlistsChanged = false;
-
-    state.playlists.forEach(playlist => {
-      if (!Array.isArray(playlist.items)) {
-        return;
-      }
-
-      const seenKeys = new Set();
-      const nextItems = [];
-
-      playlist.items.forEach(key => {
-        const cleanKey = key.split(/[\\/]/).filter(Boolean).pop() || key;
-
-        if (!cleanKeys.has(cleanKey)) {
-          brokenPlaylistItems += 1;
-          playlistsChanged = true;
-          return;
-        }
-
-        const nextKey = cleanKey;
-
-        if (seenKeys.has(nextKey)) {
-          playlistsChanged = true;
-          return;
-        }
-
-        if (nextKey !== key) {
-          playlistsChanged = true;
-        }
-
-        seenKeys.add(nextKey);
-        nextItems.push(nextKey);
-      });
-
-      if (nextItems.length !== playlist.items.length) {
-        playlistsChanged = true;
-      }
-
-      playlist.items = nextItems;
-    });
-
-    if (playlistsChanged) {
-      state.shuffledPlaylistItemsById.clear();
-      savePlaylists(state.playlists, state.currentPlaylistId);
-    }
-
-    state.opfsSaveSequence += 1;
-    markLibraryPersisted(repairedFiles);
-    rebuildLibrary(repairedFiles);
-    renderPlaylists?.();
-    return {
-      brokenPlaylistItems,
-      files: repairedFiles.length,
-    };
-  }
-
   async function removeTrackFromLibrary(trackIndex) {
     const file = state.files[trackIndex];
 
@@ -390,7 +324,6 @@ export function createLibraryController({
   return {
     bindFileInput,
     pickMusicDirectory,
-    repairLibrary,
     removeTrackFromLibrary,
     restorePersistedLibrary,
   };

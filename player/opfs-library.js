@@ -328,69 +328,6 @@ export async function deleteLibraryTrackFromOpfs(trackKey) {
   });
 }
 
-export async function repairLibraryManifestFromOpfs() {
-  if (!isOpfsLibrarySupported()) {
-    return [];
-  }
-
-  try {
-    const libraryDirectoryHandle = await getLibraryDirectoryHandle(false);
-
-    if (!libraryDirectoryHandle) {
-      return [];
-    }
-
-    const filesByCleanKey = new Map();
-    const staleKeys = new Set();
-    const legacyFiles = await collectLegacyFiles(libraryDirectoryHandle);
-
-    for (const file of legacyFiles) {
-      const oldKey = getFileKey(file);
-      const cleanKey = file.name || oldKey.split('/').filter(Boolean).pop();
-
-      if (!cleanKey) {
-        continue;
-      }
-
-      try {
-        await file.slice(0, 1).arrayBuffer();
-      } catch (error) {
-        console.warn(
-          `Skipping unreadable OPFS library file "${oldKey}":`,
-          error
-        );
-        continue;
-      }
-
-      if (oldKey !== cleanKey) {
-        staleKeys.add(oldKey);
-      }
-
-      if (!filesByCleanKey.has(cleanKey) || oldKey === cleanKey) {
-        filesByCleanKey.set(cleanKey, setFileKey(file, cleanKey));
-      }
-    }
-
-    const files = [...filesByCleanKey.values()];
-
-    if (files.length > 0) {
-      await saveLibraryToOpfs(files, getFileKey);
-    }
-
-    for (const staleKey of staleKeys) {
-      await deleteLibraryTrackFromOpfs(staleKey);
-    }
-
-    return files;
-  } catch (error) {
-    if (error?.name === 'NotFoundError') {
-      return [];
-    }
-
-    throw error;
-  }
-}
-
 export async function loadLibraryFromOpfs() {
   if (!isOpfsLibrarySupported()) {
     return [];
