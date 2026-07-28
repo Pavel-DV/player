@@ -7,6 +7,7 @@ import { createNormalizationService } from './player/normalization.js';
 import {
   deleteLibraryTrackFromOpfs,
   loadLibraryFromOpfs,
+  repairLibraryManifestFromOpfs,
   saveLibraryToOpfs,
 } from './player/opfs-library.js';
 import {
@@ -103,6 +104,7 @@ const library = createLibraryController({
   deletePersistedTrack: trackKey => deleteLibraryTrackFromOpfs(trackKey),
   loadPersistedLibrary: () => loadLibraryFromOpfs(),
   persistLibrary: (files, options) => saveLibraryToOpfs(files, getFileKey, options),
+  repairPersistedLibrary: () => repairLibraryManifestFromOpfs(),
   savePlaylists,
   renderList: () => ui.renderList(),
   renderPlaylists: () => ui.renderPlaylists(),
@@ -304,6 +306,33 @@ if (dom.clearCacheBtn) {
   };
 }
 
+if (dom.repairLibraryBtn) {
+  dom.repairLibraryBtn.onclick = async () => {
+    if (!window.confirm('Repair OPFS library manifest from existing files?')) {
+      return;
+    }
+
+    playback?.kill();
+
+    try {
+      const result = await library.repairLibrary();
+
+      if (!result) {
+        window.alert('No library files found to repair');
+        return;
+      }
+
+      saveCurrentPlayerState();
+      window.alert(
+        `Library repaired\nFiles: ${result.files}\nBroken playlist items removed: ${result.brokenPlaylistItems}`
+      );
+    } catch (error) {
+      console.error('Failed to repair library:', error);
+      window.alert('Failed to repair library');
+    }
+  };
+}
+
 if (dom.explicitBtn) {
   dom.explicitBtn.onclick = () => {
     const wasPlaying = state.isPlaying;
@@ -377,6 +406,7 @@ window.player = {
   pickMusicDirectory: library.pickMusicDirectory,
   play: playback.play,
   prev: playback.prev,
+  repairLibrary: () => dom.repairLibraryBtn?.click(),
   setLibrarySearch: ui.setLibrarySearch,
   toggleNormalize: playback.toggleNormalize,
   toggleAllowExplicit: playback.toggleAllowExplicit,
