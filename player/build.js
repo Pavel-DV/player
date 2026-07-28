@@ -1,1 +1,1 @@
-export const playerBuildId = 'more faces';
+export const playerBuildId = 'car icons setting';

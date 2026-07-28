@@ -57,7 +57,7 @@ export function createPlaybackController({
   let hasLoggedPlaybackAudioSessionUnavailable = false;
   let mediaSessionRevision = 0;
   let mediaMetadataUsesAnimatedArtist = false;
-  const nextAnimatedArtist = createArtistAnimation();
+  const nextAnimatedArtist = createArtistAnimation(() => state.carArtwork);
   let testToneAudioContext = null;
   let testToneAudio = null;
 
@@ -1667,6 +1667,15 @@ export function createPlaybackController({
     savePlayerState();
   }
 
+  function saveCurrentSettings() {
+    saveSettings({
+      shuffle: state.shuffle,
+      normalize: state.normalize,
+      allowExplicit: state.allowExplicit,
+      carArtwork: state.carArtwork,
+    });
+  }
+
   function setShuffle(enabled) {
     const nextShuffleState = Boolean(enabled);
     const currentPlaylistId = state.currentPlaylistId;
@@ -1681,11 +1690,7 @@ export function createPlaybackController({
 
   function toggleShuffle() {
     setShuffle(!state.shuffle);
-    saveSettings({
-      shuffle: state.shuffle,
-      normalize: state.normalize,
-      allowExplicit: state.allowExplicit,
-    });
+    saveCurrentSettings();
     void ui.highlight();
   }
 
@@ -1697,11 +1702,7 @@ export function createPlaybackController({
 
   function toggleNormalize() {
     setNormalize(!state.normalize);
-    saveSettings({
-      shuffle: state.shuffle,
-      normalize: state.normalize,
-      allowExplicit: state.allowExplicit,
-    });
+    saveCurrentSettings();
     void reloadCurrentTrackSource({
       reason: 'toggleNormalize',
       resumePlayback: state.isPlaying,
@@ -1715,12 +1716,15 @@ export function createPlaybackController({
 
   function toggleAllowExplicit() {
     setAllowExplicit(!state.allowExplicit);
-    saveSettings({
-      shuffle: state.shuffle,
-      normalize: state.normalize,
-      allowExplicit: state.allowExplicit,
-    });
+    saveCurrentSettings();
     void ui.highlight();
+  }
+
+  function toggleCarArtwork() {
+    state.carArtwork = !state.carArtwork;
+    dom.carBtn?.classList.toggle('on', state.carArtwork);
+    saveCurrentSettings();
+    syncAnimatedArtistMetadata();
   }
 
   function bindAudioEvents() {
@@ -1984,6 +1988,7 @@ export function createPlaybackController({
     startTrack,
     syncMediaMetadata,
     toggleAllowExplicit,
+    toggleCarArtwork,
     toggleNormalize,
     toggleShuffle,
   };

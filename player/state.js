@@ -17,6 +17,7 @@ export function createPlayerState() {
     shuffle: false,
     normalize: false,
     allowExplicit: true,
+    carArtwork: true,
     files: [],
     playlists: [],
     currentPlaylistId: null,

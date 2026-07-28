@@ -351,6 +351,8 @@ const settings = loadSettings();
 playback.setShuffle(settings.shuffle);
 playback.setNormalize(settings.normalize);
 playback.setAllowExplicit(settings.allowExplicit);
+state.carArtwork = settings.carArtwork;
+dom.carBtn?.classList.toggle('on', state.carArtwork);
 
 ui.renderPlaylists();
 ui.renderList();
@@ -378,6 +380,7 @@ window.player = {
   setLibrarySearch: ui.setLibrarySearch,
   toggleNormalize: playback.toggleNormalize,
   toggleAllowExplicit: playback.toggleAllowExplicit,
+  toggleCarArtwork: playback.toggleCarArtwork,
   toggleShuffle: playback.toggleShuffle,
 };
 

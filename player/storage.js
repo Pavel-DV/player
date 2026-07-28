@@ -54,6 +54,7 @@ export function loadSettings() {
     shuffle: Boolean(data?.shuffle),
     normalize: Boolean(data?.normalize),
     allowExplicit: data?.allowExplicit !== false,
+    carArtwork: data?.carArtwork !== false,
   };
 }
 

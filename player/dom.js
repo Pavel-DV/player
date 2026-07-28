@@ -22,6 +22,7 @@ export function getPlayerDom() {
     currentPlaylistNameEl: document.getElementById('currentPlaylistName'),
     playlistsEl: document.getElementById('playlists'),
     addPlaylistBtn: document.getElementById('addPlaylist'),
+    carBtn: document.getElementById('carBtn'),
     explicitBtn: document.getElementById('explicitBtn'),
     mainPlayPauseBtn: document.getElementById('mainPlayPauseBtn'),
     shuffleBtn: document.getElementById('shuffleBtn'),
