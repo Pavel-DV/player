@@ -28,7 +28,6 @@ export function getPlayerDom() {
     shuffleBtn: document.getElementById('shuffleBtn'),
     normalizeBtn: document.getElementById('normalizeBtn'),
     clearCacheBtn: document.getElementById('clearCacheBtn'),
-    cleanLibraryBtn: document.getElementById('cleanLibraryBtn'),
     screens: [
       document.getElementById('screen1'),
       document.getElementById('screen2'),

@@ -21,7 +21,6 @@ import {
   loadTrackRepeatCount,
   loadTrackStartTime,
   removePlaylistState,
-  remapStoredTrackKeys,
   saveExplicitInfo,
   saveTrackEndTime,
   saveTrackGain,
@@ -104,7 +103,6 @@ const library = createLibraryController({
   deletePersistedTrack: trackKey => deleteLibraryTrackFromOpfs(trackKey),
   loadPersistedLibrary: () => loadLibraryFromOpfs(),
   persistLibrary: (files, options) => saveLibraryToOpfs(files, getFileKey, options),
-  remapStoredTrackKeys,
   savePlaylists,
   renderList: () => ui.renderList(),
   renderPlaylists: () => ui.renderPlaylists(),
@@ -314,30 +312,6 @@ if (dom.explicitBtn) {
   };
 }
 
-if (dom.cleanLibraryBtn) {
-  dom.cleanLibraryBtn.onclick = async () => {
-    if (
-      !window.confirm(
-        'Delete tracks that are not in any playlist and fix saved track names?'
-      )
-    ) {
-      return;
-    }
-
-    const result = await library.removeUnusedTracksFromLibrary();
-
-    if (!result) {
-      window.alert('Failed to clean library');
-      return;
-    }
-
-    saveCurrentPlayerState();
-    window.alert(
-      `Library cleaned\nDeleted: ${result.removedCount}\nRenamed: ${result.normalizedCount}`
-    );
-  };
-}
-
 if (dom.explicitTrackToggleEl) {
   dom.explicitTrackToggleEl.onclick = event => {
     const target = event.currentTarget;
@@ -398,7 +372,6 @@ dom.audioElement?.addEventListener('durationchange', () => {
 
 window.player = {
   addAllFilesToCurrentPlaylist: ui.addAllFilesToCurrentPlaylist,
-  cleanLibrary: () => dom.cleanLibraryBtn?.click(),
   next: playback.next,
   pause: playback.pause,
   pickMusicDirectory: library.pickMusicDirectory,
