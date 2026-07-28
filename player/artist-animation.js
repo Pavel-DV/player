@@ -281,16 +281,16 @@ const ARTIST_ANIMATION_FRAME_INTERVAL_PHONE_MS = 10;
 
 export function createArtistAnimation(getCarArtworkEnabled) {
   let index = 0;
+  let frame = '';
   let nextFrameAt = 0;
 
   return () => {
     const now = Date.now();
-    const carArtworkEnabled = getCarArtworkEnabled();
-    const frames = carArtworkEnabled ? carFrames : phoneFrames;
-
-    const frame = frames[index];
 
     if (now >= nextFrameAt) {
+      const carArtworkEnabled = getCarArtworkEnabled();
+      const frames = carArtworkEnabled ? carFrames : phoneFrames;
+      frame = frames[index % frames.length];
       index = (index + 1) % frames.length;
       nextFrameAt = now + (carArtworkEnabled ? ARTIST_ANIMATION_FRAME_INTERVAL_CAR_MS : ARTIST_ANIMATION_FRAME_INTERVAL_PHONE_MS);
     }

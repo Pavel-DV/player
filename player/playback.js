@@ -300,7 +300,7 @@ export function createPlaybackController({
     const mediaSessionSignature = JSON.stringify({
       trackKey,
       title: mediaMetadataPayload.title,
-      artist: mediaMetadataPayload.artist,
+      artist: metadata.artist || null,
       album: mediaMetadataPayload.album,
       artworkSource,
     });
@@ -325,7 +325,13 @@ export function createPlaybackController({
       return;
     }
 
-    navigator.mediaSession.metadata.artist = nextAnimatedArtist();
+    const artist = nextAnimatedArtist();
+
+    if (navigator.mediaSession.metadata.artist === artist) {
+      return;
+    }
+
+    navigator.mediaSession.metadata.artist = artist;
   }
 
   function getCurrentPlaylistName() {
