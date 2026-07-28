@@ -11,6 +11,7 @@ export function createLibraryController({
   deletePersistedTrack,
   loadPersistedLibrary,
   persistLibrary,
+  remapStoredTrackKeys,
   savePlaylists,
   renderList,
   renderPlaylists,
@@ -56,6 +57,14 @@ export function createLibraryController({
     });
   }
 
+  function getBasename(key) {
+    return key?.split(/[\\/]/).filter(Boolean).pop() || key || '';
+  }
+
+  function getCleanFileKey(file) {
+    return file?.name || getBasename(getFileKey(file));
+  }
+
   function removeTrackKeyFromPlaylists(trackKey) {
     let changed = false;
 
@@ -97,6 +106,49 @@ export function createLibraryController({
 
         return primaryKey;
       });
+    });
+
+    if (changed) {
+      savePlaylists(state.playlists, state.currentPlaylistId);
+    }
+  }
+
+  function remapPlaylistKeys(trackKeyMap) {
+    let changed = false;
+
+    state.playlists.forEach(playlist => {
+      if (!Array.isArray(playlist.items)) {
+        return;
+      }
+
+      let playlistChanged = false;
+      const seenKeys = new Set();
+      const nextItems = [];
+
+      playlist.items.forEach(key => {
+        const nextKey = trackKeyMap.get(key) ?? key;
+
+        if (trackKeyMap.has(key)) {
+          if (seenKeys.has(nextKey)) {
+            playlistChanged = true;
+            return;
+          }
+
+          seenKeys.add(nextKey);
+        }
+
+        if (nextKey !== key) {
+          playlistChanged = true;
+        }
+
+        nextItems.push(nextKey);
+      });
+
+      if (playlistChanged) {
+        playlist.items = nextItems;
+        state.shuffledPlaylistItemsById.delete(playlist.id);
+        changed = true;
+      }
     });
 
     if (changed) {
@@ -321,10 +373,93 @@ export function createLibraryController({
     }
   }
 
+  async function removeUnusedTracksFromLibrary() {
+    const usedFileIndices = new Set();
+
+    state.playlists.forEach(playlist => {
+      (playlist.items ?? []).forEach(key => {
+        const fileIndex = state.fileIndexByKey.get(key);
+
+        if (typeof fileIndex === 'number') {
+          usedFileIndices.add(fileIndex);
+        }
+      });
+    });
+
+    const trackKeyMap = new Map();
+    const nextFiles = state.files.filter((file, index) => {
+      if (!usedFileIndices.has(index)) {
+        return false;
+      }
+
+      const trackKey = getFileKey(file);
+      const nextKey = getCleanFileKey(file);
+
+      trackKeyMap.set(trackKey, nextKey);
+      trackKeyMap.set(getBasename(trackKey), nextKey);
+      setFileKey(file, nextKey);
+      return true;
+    });
+    const removedCount = state.files.length - nextFiles.length;
+    const normalizedCount = [...trackKeyMap].filter(
+      ([trackKey, nextKey]) => trackKey !== nextKey
+    ).length;
+    const saveSequence = state.opfsSaveSequence + 1;
+
+    state.opfsSaveSequence = saveSequence;
+    state.explicitTrackKeys = new Set(
+      [...state.explicitTrackKeys]
+        .map(trackKey => trackKeyMap.get(trackKey) ?? trackKey)
+        .filter(trackKey =>
+          trackKey && nextFiles.some(file => getFileKey(file) === trackKey)
+        )
+    );
+    remapPlaylistKeys(trackKeyMap);
+    remapStoredTrackKeys?.(trackKeyMap);
+    markLibraryPending(nextFiles);
+    rebuildLibrary(nextFiles);
+
+    try {
+      await persistLibrary?.(nextFiles, {
+        onFileSaved: key => {
+          if (
+            saveSequence !== state.opfsSaveSequence ||
+            !key ||
+            !state.fileIndexByKey.has(key)
+          ) {
+            return;
+          }
+
+          state.opfsPendingTrackKeys.delete(key);
+          state.opfsPersistedTrackKeys.add(key);
+          renderList();
+          void highlight();
+        },
+      });
+
+      if (saveSequence === state.opfsSaveSequence) {
+        markLibraryPersisted(state.files);
+        renderList();
+        void highlight();
+      }
+
+      return {
+        normalizedCount,
+        removedCount,
+      };
+    } catch (error) {
+      console.error('Failed to clean unused library tracks:', error);
+      renderList();
+      void highlight();
+      return null;
+    }
+  }
+
   return {
     bindFileInput,
     pickMusicDirectory,
     removeTrackFromLibrary,
+    removeUnusedTracksFromLibrary,
     restorePersistedLibrary,
   };
 }

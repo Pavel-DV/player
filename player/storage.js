@@ -326,6 +326,77 @@ export function saveTrackRepeatCount(trackKey, repeatCount) {
   return writeJson(TRACK_REPEAT_INFO_KEY, allRepeatInfo, 'save track repeat info');
 }
 
+function remapRecordKeys(storageKey, trackKeyMap, errorLabel) {
+  const record = readJson(storageKey, null, `load ${errorLabel} for key remap`);
+
+  if (!record || typeof record !== 'object') {
+    return false;
+  }
+
+  let changed = false;
+
+  trackKeyMap.forEach((nextKey, trackKey) => {
+    if (
+      nextKey === trackKey ||
+      !Object.prototype.hasOwnProperty.call(record, trackKey)
+    ) {
+      return;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(record, nextKey)) {
+      record[nextKey] = record[trackKey];
+    }
+
+    delete record[trackKey];
+    changed = true;
+  });
+
+  return (
+    changed && writeJson(storageKey, record, `save ${errorLabel} after key remap`)
+  );
+}
+
+function remapPlaylistStateKeys(storageKey, trackKeyMap, errorLabel) {
+  const states = readJson(storageKey, null, `load ${errorLabel} for key remap`);
+
+  if (!states || typeof states !== 'object') {
+    return false;
+  }
+
+  let changed = false;
+
+  Object.values(states).forEach(state => {
+    const nextKey = trackKeyMap.get(state?.trackKey);
+
+    if (nextKey) {
+      state.trackKey = nextKey;
+      changed = true;
+    }
+  });
+
+  return (
+    changed && writeJson(storageKey, states, `save ${errorLabel} after key remap`)
+  );
+}
+
+export function remapStoredTrackKeys(trackKeyMap) {
+  if (!(trackKeyMap instanceof Map) || trackKeyMap.size === 0) {
+    return false;
+  }
+
+  return [
+    remapRecordKeys(NORM_INFO_KEY, trackKeyMap, 'normalization info'),
+    remapRecordKeys(TRACK_START_INFO_KEY, trackKeyMap, 'track start info'),
+    remapRecordKeys(TRACK_END_TIME_INFO_KEY, trackKeyMap, 'track end time'),
+    remapRecordKeys(LEGACY_TRACK_END_INFO_KEY, trackKeyMap, 'legacy track end info'),
+    remapRecordKeys(TRACK_GAIN_INFO_KEY, trackKeyMap, 'track gain info'),
+    remapRecordKeys(EXPLICIT_INFO_KEY, trackKeyMap, 'explicit info'),
+    remapRecordKeys(TRACK_REPEAT_INFO_KEY, trackKeyMap, 'track repeat info'),
+    remapPlaylistStateKeys(PLAYLIST_STATES_KEY, trackKeyMap, 'playlist states'),
+    remapPlaylistStateKeys(LEGACY_PLAYER_STATES_KEY, trackKeyMap, 'legacy player states'),
+  ].some(Boolean);
+}
+
 export function clearPlayerCache() {
   try {
     localStorage.removeItem(NORM_INFO_KEY);

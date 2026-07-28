@@ -545,6 +545,7 @@ export function createUiController({
       emptyMessage.style.display = state.files.length === 0 ? 'block' : 'none';
     }
     dom.addAllBtn.style.display = state.files.length === 0 ? 'none' : '';
+    dom.cleanLibraryBtn.style.display = state.files.length === 0 ? 'none' : '';
 
     const currentPlaylist = getCurrentPlaylist();
     const playlistItems = new Set(currentPlaylist?.items ?? []);
