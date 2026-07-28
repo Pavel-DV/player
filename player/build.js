@@ -1,1 +1,1 @@
-export const playerBuildId = 'nbsp, skip frames';
+export const playerBuildId = 'update alert format';
