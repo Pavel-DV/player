@@ -99,8 +99,8 @@ const framesBoth = Object.freeze([
   String.raw`   [$̲̅(5)$̲̅]   `,
 
   String.raw`   ╚(°_°)╗      `,
-  String.raw`   ╚(°_°)╗      `,
   String.raw`   ╔(°_°)╗      `,
+  String.raw`   ╚(°_°)╗      `,
   String.raw`   ╔(°_°)╗      `,
 
   String.raw`    (~_^)       `,
