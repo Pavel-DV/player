@@ -79,38 +79,24 @@ const framesBoth = Object.freeze([
   String.raw`   <(o_o)>    `,
   String.raw`    /(^_^)\     `,
 
-  String.raw`    (° °)       `,
-
-  String.raw`    (⌐_⌐)       `,
-
   String.raw`   \ (*_*) /    `,
   String.raw`   - (o_o) -    `,
   String.raw`   / (^_^) \    `,
-  String.raw`   - (o_o) -    `,
-
-  String.raw`   /|  o  |\     `,
-  String.raw`   -|  o  |-    `,
-  String.raw`   \|  o  |/   `,
-  String.raw`   -|  o  |-    `,
+  String.raw`   - (⌐_⌐) -    `,
 
   String.raw`  [$̲̅(5)$̲̅]    `,
   String.raw`   [$̲̅(5)$̲̅]   `,
   String.raw`  [$̲̅(5)$̲̅]  `,
   String.raw`   [$̲̅(5)$̲̅]   `,
 
-  String.raw`   ╚(°_°)╗      `,
-  String.raw`   ╔(°_°)╗      `,
-  String.raw`   ╚(°_°)╗      `,
-  String.raw`   ╔(°_°)╗      `,
-
   String.raw`    (~_^)       `,
   String.raw`     (^_~)      `,
   String.raw`    (~_^)       `,
   String.raw`     (^_~)      `,
 
-  String.raw`   ┏(-_-)┛     `,
-  String.raw`   ┗(-_-)┛     `,
-  String.raw`   ┗(-_-)┓     `,
+  String.raw`   ┏(-_°)┛     `,
+  String.raw`   ┗(°_°)┛     `,
+  String.raw`   ┗(°_-)┓     `,
   String.raw`   ┏(-_-)┓     `,
 ]);
 
