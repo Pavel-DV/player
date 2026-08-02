@@ -19,20 +19,40 @@ const framesBoth = Object.freeze([
   String.raw`  ( . )( . )  `,
   String.raw`   ( . )( . )   `,
 
+  String.raw`       :)      `,
+  String.raw`       :D      `,
+  String.raw`       :)      `,
+  String.raw`       :D      `,
+
   String.raw`    U(^_^)U      `,
   String.raw`    U(o_o)U     `,
   String.raw`    U(^_^)U    `,
   String.raw`    U(o_o)U     `,
+
+  String.raw`        :p      `,
+  String.raw`        :b     `,
+  String.raw`        :q      `,
+  String.raw`        :d     `,
 
   String.raw`    \[o_o]/      `,
   String.raw`    -[O_O]-     `,
   String.raw`    \[o_o]/    `,
   String.raw`    -[O_O]-     `,
 
+  String.raw`      \(OдO)/    `,
+  String.raw`       \(OдO)/   `,
+  String.raw`      \(OдO)/    `,
+  String.raw`       \(OдO)/   `,
+
   String.raw`    d(o_o)p      `,
   String.raw`    q(O_O)p     `,
   String.raw`    q(o_o)b    `,
   String.raw`    q(O_O)p     `,
+
+  String.raw`        (ToT)    `,
+  String.raw`        (TOT)    `,
+  String.raw`        (ToT)    `,
+  String.raw`        (TOT)    `,
 
   String.raw`    \<o_o>/      `,
   String.raw`    -<O_O>-     `,
@@ -43,6 +63,11 @@ const framesBoth = Object.freeze([
   String.raw`   \@(o_o)@/    `,
   String.raw`  <@('_')@>   `,
   String.raw`   /@(o_o)@\    `,
+
+  String.raw`     (>o<)    `,
+  String.raw`     (>O<)    `,
+  String.raw`     (>o<)    `,
+  String.raw`     (>O<)    `,
 
   String.raw`  <(*(oo)*)>    `,
   String.raw`   \(*(oo)*)/   `,
